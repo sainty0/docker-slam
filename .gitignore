@@ -1,0 +1,67 @@
+# ────────────────────────────────
+# ROS 2 build artifacts
+# ────────────────────────────────
+build/
+install/
+log/
+*.log
+*.pyc
+__pycache__/
+
+# colcon metadata
+.colcon/
+
+# ROSBag output
+*.db3
+*.sqlite3
+*.mcap
+*.bag
+*.yaml
+*.zip
+*.png
+
+# ros2bag_MulRan outputs
+/data/bags/
+output/bags/
+output/results/
+output/logs/
+
+# Launch-generated stuff
+*.rviz
+*.urdf
+*.xacro~
+
+# Python venvs
+.venv/
+env/
+venv/
+poetry.lock
+
+# Docker
+*.tar
+*.tar.gz
+*.img
+.docker/
+
+# Editor & OS clutter
+.vscode/
+.idea/
+*.swp
+*.swo
+*.DS_Store
+Thumbs.db
+*.bak
+
+# Temporary conversion or cache folders
+/tmp/
+.cache/
+rosdep-install.log
+
+# For specific sequence output
+KAIST01_estimation_*/
+*_results/
+*_ape.*
+
+# Ignore run timestamps
+run_eval_*.log
+

@@ -1,0 +1,14 @@
+FROM osrf/ros:humble-desktop
+
+# Install GTSAM dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential cmake git libboost-all-dev libeigen3-dev \
+    libgoogle-glog-dev libgflags-dev libtbb-dev libyaml-cpp-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy and build GTSAM
+COPY ./gtsam /opt/gtsam
+WORKDIR /opt/gtsam/build
+RUN cmake .. -DGTSAM_USE_SYSTEM_EIGEN=ON -DCMAKE_INSTALL_PREFIX=/usr/local && \
+    make -j$(nproc) && make install
+
