@@ -3,6 +3,7 @@ services:
     build: .
     image: slam-mulran:humble
     volumes:
+      - /mnt/c/Users/Kevin/Downloads/Lio-sam/park_ros2:/data/bags/park
       - ./data/mulran:/data/mulran           # your raw MulRan folders
       - ./output/bags:/data/bags            # where converted .db3 will go
       - ./output/results:/data/results      # where evo plots & stats go
@@ -41,8 +42,9 @@ services:
       - XDG_RUNTIME_DIR=/tmp/runtime-root
       - NVIDIA_DRIVER_CAPABILITIES=all
       - NVIDIA_VISIBLE_DEVICES=all
+      - SEQUENCE_NAME=PARK
     volumes:
-      - /mnt/c/Users/Kevin/Downloads/Lio-sam:/lio-sam-bags
+      - /mnt/c/Users/Kevin/Downloads/Lio-sam/park_ros2:/data/bags/park
       - /tmp/.X11-unix:/tmp/.X11-unix
       - /mnt/c/Users/Kevin/Downloads/MulRan/KAIST01:/data/mulran:ro
       - /mnt/c/Users/Kevin/Downloads/MulRan/KAIST01/retrieval_bag:/data/bags/KAIST01:ro

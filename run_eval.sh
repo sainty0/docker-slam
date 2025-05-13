@@ -2,7 +2,7 @@
 set -ex
 
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-SEQUENCE_NAME=KAIST01
+SEQUENCE_NAME=${SEQUENCE_NAME:-PARK} 
 
 # Dynamic paths for this run
 LOG_DIR=/output/logs/${SEQUENCE_NAME}_${TIMESTAMP}
