@@ -20,6 +20,15 @@ RUN apt-get update && apt-get install -y \
     ros-humble-tf-transformations \
     ros-humble-rmw-cyclonedds-cpp \
     ros-humble-xacro \
+    ros-humble-rviz2 \
+    libxcb-xinerama0 \
+    libxkbcommon-x11-0 \
+    libwayland-client0 \
+    libwayland-cursor0 \
+    libwayland-egl1-mesa \
+    libegl1-mesa \
+    libgl1-mesa-glx \
+    libgl1-mesa-dri \
     && rm -rf /var/lib/apt/lists/*
 
 ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp

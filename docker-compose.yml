@@ -1,4 +1,3 @@
-version: "3.8"
 services:
   slam:
     build: .
@@ -28,15 +27,30 @@ services:
     network_mode: "host"
     depends_on:
       - slam
+
   eval:
     build: .
     image: slam-mulran:humble
     command: bash -c "/run_eval.sh"
+    user: "${UID}:${GID}"
+    environment:
+      - DISPLAY=${DISPLAY}
+      - LIBGL_ALWAYS_SOFTWARE=1
+      - LIBGL_ALWAYS_INDIRECT=0
+      - QT_X11_NO_MITSHM=1
+      - XDG_RUNTIME_DIR=/tmp/runtime-root
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - NVIDIA_VISIBLE_DEVICES=all
     volumes:
+      - /mnt/c/Users/Kevin/Downloads/Lio-sam:/lio-sam-bags
+      - /tmp/.X11-unix:/tmp/.X11-unix
       - /mnt/c/Users/Kevin/Downloads/MulRan/KAIST01:/data/mulran:ro
       - /mnt/c/Users/Kevin/Downloads/MulRan/KAIST01/retrieval_bag:/data/bags/KAIST01:ro
       - ./output/results:/data/results
       - ./output/logs:/output/logs
       - ./run_eval.sh:/run_eval.sh
+    devices:
+      - /dev/dri
     network_mode: host
     tty: true
+    privileged: true
