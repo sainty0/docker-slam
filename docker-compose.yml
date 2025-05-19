@@ -1,34 +1,4 @@
 services:
-  slam:
-    build: .
-    image: slam-mulran:humble
-    volumes:
-      - /mnt/c/Users/Kevin/Downloads/Lio-sam/park_ros2:/data/bags/park
-      - ./data/mulran:/data/mulran           # your raw MulRan folders
-      - ./output/bags:/data/bags            # where converted .db3 will go
-      - ./output/results:/data/results      # where evo plots & stats go
-    network_mode: "host"                    # ROS2 Discovery over host network
-    environment:
-      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-    tty: true
-
-  # (optional) a dedicated converter-only service
-  converter:
-    build: .
-    image: slam-mulran:humble
-    command: >
-      bash -lc
-      "ros2 launch ros2bag_mulran ros2bag_MulRan.launch.py
-        data_folder_path:=/data/mulran
-        sequence_name:=KAIST01
-        dst_path:=/data/bags"
-    volumes:
-      - /mnt/c/Users/Kevin/Downloads/MulRan/KAIST01:/data/mulran:ro
-      - ./output/bags:/data/bags
-    network_mode: "host"
-    depends_on:
-      - slam
-
   eval:
     build: .
     image: slam-mulran:humble
@@ -47,7 +17,7 @@ services:
       - /mnt/c/Users/Kevin/Downloads/Lio-sam/park_ros2:/data/bags/park
       - /tmp/.X11-unix:/tmp/.X11-unix
       - /mnt/c/Users/Kevin/Downloads/MulRan/KAIST01:/data/mulran:ro
-      - /mnt/c/Users/Kevin/Downloads/MulRan/KAIST01/retrieval_bag:/data/bags/KAIST01:ro
+      - /data/bags/KAIST01:/data/bags/KAIST01:ro
       - ./output/results:/data/results
       - ./output/logs:/output/logs
       - ./run_eval.sh:/run_eval.sh
@@ -56,3 +26,19 @@ services:
     network_mode: host
     tty: true
     privileged: true
+  # (optional) a dedicated converter-only service
+  converter:
+    build: .
+    image: slam-mulran:humble
+    command: >
+      bash -lc
+      "ros2 launch ros2bag_mulran ros2bag_MulRan.launch.py
+        data_folder_path:=/data/mulran
+        sequence_name:=KAIST01
+        dst_path:=/data/bags"
+    volumes:
+      - /mnt/c/Users/Kevin/Downloads/MulRan/KAIST01:/data/mulran:ro
+      - ./output/bags:/data/bags
+    network_mode: "host"
+    depends_on:
+      - slam
