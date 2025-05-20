@@ -14,9 +14,8 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - SEQUENCE_NAME=PARK
     volumes:
-      - /mnt/c/Users/Kevin/Downloads/Lio-sam/park_ros2:/data/bags/park
       - /tmp/.X11-unix:/tmp/.X11-unix
-      - /mnt/c/Users/Kevin/Downloads/MulRan/KAIST01:/data/mulran:ro
+      - /PATHTODATASET/KAIST01:/data/mulran:ro
       - /data/bags/KAIST01:/data/bags/KAIST01:ro
       - ./output/results:/data/results
       - ./output/logs:/output/logs
@@ -37,7 +36,7 @@ services:
         sequence_name:=KAIST01
         dst_path:=/data/bags"
     volumes:
-      - /mnt/c/Users/Kevin/Downloads/MulRan/KAIST01:/data/mulran:ro
+      - /PATHTODATASET:/data/mulran:ro
       - ./output/bags:/data/bags
     network_mode: "host"
     depends_on:
