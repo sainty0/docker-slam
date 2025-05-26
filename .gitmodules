@@ -1,0 +1,9 @@
+[submodule "gtsam"]
+	path = gtsam
+	url = https://github.com/borglab/gtsam.git
+[submodule "workspace/src/LIO-SAM"]
+	path = workspace/src/LIO-SAM
+	url = https://github.com/sainty0/LIO-SAM.git
+[submodule "workspace/src/ros2bag_MulRan"]
+	path = workspace/src/ros2bag_MulRan
+	url = https://github.com/ros2/rosbag2.git
