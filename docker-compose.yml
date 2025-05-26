@@ -14,7 +14,7 @@ services:
   eval:
     image: slam-mulran:humble
     command: bash -c "/run_eval.sh"
-    user: "${UID}:${GID}"
+    # user: "${UID}:${GID}"
     environment:
       - DISPLAY=${DISPLAY}
       - LIBGL_ALWAYS_SOFTWARE=1
@@ -24,7 +24,9 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=all
       - NVIDIA_VISIBLE_DEVICES=all
       - SEQUENCE_NAME=PARK
+      - XAUTHORITY=/root/.Xauthority
     volumes:
+      - ${HOME}/.Xauthority:/root/.Xauthority:ro
       - /tmp/.X11-unix:/tmp/.X11-unix
       - /PATHTODATASET/KAIST01:/data/mulran:ro
       - /data/bags/KAIST01:/data/bags/KAIST01:ro
