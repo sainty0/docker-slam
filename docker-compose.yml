@@ -1,6 +1,17 @@
 services:
+  gtsam-base:
+    image: gtsam-base:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.gtsam 
+  slam-mulran:
+    image: slam-mulran:humble
+    build:
+      context: .
+      dockerfile: Dockerfile 
+    depends_on:
+      - gtsam-base
   eval:
-    build: .
     image: slam-mulran:humble
     command: bash -c "/run_eval.sh"
     user: "${UID}:${GID}"
@@ -27,7 +38,6 @@ services:
     privileged: true
   # (optional) a dedicated converter-only service
   converter:
-    build: .
     image: slam-mulran:humble
     command: >
       bash -lc
@@ -39,5 +49,3 @@ services:
       - /PATHTODATASET:/data/mulran:ro
       - ./output/bags:/data/bags
     network_mode: "host"
-    depends_on:
-      - slam

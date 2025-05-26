@@ -1,4 +1,4 @@
-FROM gtsam-base
+FROM gtsam-base:latest
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -29,6 +29,7 @@ RUN apt-get update && apt-get install -y \
     libegl1-mesa \
     libgl1-mesa-glx \
     libgl1-mesa-dri \
+    libgeographic-dev \
     && rm -rf /var/lib/apt/lists/*
 
 ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
