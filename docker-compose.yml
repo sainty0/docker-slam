@@ -1,53 +1,28 @@
+version: "3.9"
 services:
   gtsam-base:
-    image: gtsam-base:latest
+    image: gtsam-base:noetic
     build:
       context: .
-      dockerfile: Dockerfile.gtsam 
-  slam-mulran:
-    image: slam-mulran:humble
+      dockerfile: Dockerfile.gtsam.noetic
+
+  sc-lio:
+    image: slam-sc-lio:noetic
     build:
       context: .
-      dockerfile: Dockerfile 
+      dockerfile: Dockerfile
     depends_on:
       - gtsam-base
-  eval:
-    image: slam-mulran:humble
-    command: bash -c "/run_eval.sh"
-    # user: "${UID}:${GID}"
-    environment:
-      - DISPLAY=${DISPLAY}
-      - LIBGL_ALWAYS_SOFTWARE=1
-      - LIBGL_ALWAYS_INDIRECT=0
-      - QT_X11_NO_MITSHM=1
-      - XDG_RUNTIME_DIR=/tmp/runtime-root
-      - NVIDIA_DRIVER_CAPABILITIES=all
-      - NVIDIA_VISIBLE_DEVICES=all
-      - SEQUENCE_NAME=PARK
-      - XAUTHORITY=/root/.Xauthority
-    volumes:
-      - ${HOME}/.Xauthority:/root/.Xauthority:ro
-      - /tmp/.X11-unix:/tmp/.X11-unix
-      - /PATHTODATASET/KAIST01:/data/mulran:ro
-      - /data/bags/KAIST01:/data/bags/KAIST01:ro
-      - ./output/results:/data/results
-      - ./output/logs:/output/logs
-      - ./run_eval.sh:/run_eval.sh
-    devices:
-      - /dev/dri
     network_mode: host
     tty: true
     privileged: true
-  # (optional) a dedicated converter-only service
-  converter:
-    image: slam-mulran:humble
-    command: >
-      bash -lc
-      "ros2 launch ros2bag_mulran ros2bag_MulRan.launch.py
-        data_folder_path:=/data/mulran
-        sequence_name:=KAIST01
-        dst_path:=/data/bags"
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
     volumes:
-      - /PATHTODATASET:/data/mulran:ro
-      - ./output/bags:/data/bags
-    network_mode: "host"
+      - ${HOME}/.Xauthority:/root/.Xauthority:ro
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - /home/santiago/Downloads/mulran/:/data/mulran
+      - ./output:/output
+      - ./run_eval_ros1.sh:/run_eval_ros1.sh
+      - ./record_mulran_input.sh:/record_mulran_input.sh

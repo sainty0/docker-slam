@@ -1,0 +1,32 @@
+FROM osrf/ros:noetic-desktop
+
+# --- Fix expired ROS APT key (June 2025 issue) -------------------------------
+RUN rm -f /etc/apt/sources.list.d/ros1-latest.list \
+ && rm -f /usr/share/keyrings/ros1-latest-archive-keyring.gpg
+
+RUN apt-get update && apt-get install -y ca-certificates curl gnupg lsb-release
+
+RUN export ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | grep -F "tag_name" | awk -F\" '{print $4}') && \
+    curl -L -o /tmp/ros-apt-source.deb \
+    "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ROS_APT_SOURCE_VERSION}/ros-apt-source_${ROS_APT_SOURCE_VERSION}.$(. /etc/os-release && echo $VERSION_CODENAME)_all.deb" && \
+    apt-get install -y /tmp/ros-apt-source.deb && \
+    rm -f /tmp/ros-apt-source.deb
+
+# --- System dependencies -----------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    build-essential cmake git libboost-all-dev libeigen3-dev \
+    libgoogle-glog-dev libgflags-dev libtbb-dev libyaml-cpp-dev \
+    wget unzip vim\
+ && rm -rf /var/lib/apt/lists/*
+
+# --- GTSAM Build -------------------------------------------------------------
+WORKDIR /tmp
+RUN wget -O gtsam.zip https://github.com/borglab/gtsam/archive/4.0.3.zip && \
+    unzip gtsam.zip && \
+    cd gtsam-4.0.3 && \
+    mkdir build && cd build && \
+    cmake .. -DGTSAM_BUILD_WITH_MARCH_NATIVE=OFF -DCMAKE_INSTALL_PREFIX=/usr/local && \
+    make -j$(nproc) && make install && \
+    rm -rf /tmp/gtsam*
+
+ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH

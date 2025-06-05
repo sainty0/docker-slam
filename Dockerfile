@@ -1,50 +1,40 @@
-FROM gtsam-base:latest
+# slam-sc-lio
+FROM gtsam-base:noetic
 
-# Install system dependencies
+# --- ROS & build tools -------------------------------------------------------
 RUN apt-get update && apt-get install -y \
-    python3-pip \
-    python3-colcon-common-extensions \
-    build-essential \
-    cmake \
-    git \
-    libboost-all-dev \
-    libeigen3-dev \
-    libgoogle-glog-dev \
-    libgflags-dev \
-    libtbb-dev \
-    libyaml-cpp-dev \
-    libgts-dev \
-    libpcl-dev \
-    ros-humble-pcl-conversions \
-    ros-humble-pcl-ros \
-    ros-humble-tf-transformations \
-    ros-humble-rmw-cyclonedds-cpp \
-    ros-humble-xacro \
-    ros-humble-rviz2 \
-    libxcb-xinerama0 \
-    libxkbcommon-x11-0 \
-    libwayland-client0 \
-    libwayland-cursor0 \
-    libwayland-egl1-mesa \
-    libegl1-mesa \
-    libgl1-mesa-glx \
-    libgl1-mesa-dri \
-    libgeographic-dev \
-    && rm -rf /var/lib/apt/lists/*
+    python3-pip python3-catkin-tools \
+    ros-noetic-pcl-conversions ros-noetic-pcl-ros \
+    ros-noetic-tf ros-noetic-rviz \
+    ros-noetic-camera-info-manager \
+    libpcl-dev libgeographic-dev     \
+ && rm -rf /var/lib/apt/lists/*
 
-ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+# evo (works the same in ROS 1)
+RUN pip3 install --no-cache-dir \
+      "numpy<1.25.0" "scipy<1.11.0" evo
 
-# Install evo
-RUN pip3 install evo
-RUN pip install --upgrade "numpy<1.25.0" "scipy<1.11.0"
+# --- catkin workspace --------------------------------------------------------
+ENV WS=/workspace/catkin_ws
+RUN mkdir -p $WS/src
+WORKDIR $WS/src
 
-# Copy workspace and build
-WORKDIR /workspace/src
-COPY ./workspace/src/ ./src/
+# ---- clone sources ----------------------------------------------------------
+# SC-LIO-SAM (Noetic branch)
+RUN git clone --depth=1 https://github.com/jxxdyy/SC-LIO-SAM.git
 
-WORKDIR /workspace
-RUN /bin/bash -c "source /opt/ros/humble/setup.bash && colcon build --symlink-install"
+# MulRan file-player (Noetic branch)
+RUN git clone --branch noetic --depth=1 https://github.com/RPM-Robotics-Lab/file_player_mulran.git
 
-ENTRYPOINT ["/bin/bash", "-c", "source /opt/ros/humble/setup.bash && source /workspace/install/setup.bash && exec bash"]
+# (optional) any extra packages here …
 
+# ---- build ------------------------------------------------------------------
+WORKDIR $WS
+RUN /bin/bash -c "source /opt/ros/noetic/setup.bash && \
+                  catkin_make -DCMAKE_BUILD_TYPE=Release"
+
+# ---- runtime ----------------------------------------------------------------
+ENV ROS_PACKAGE_PATH=$WS/src:$ROS_PACKAGE_PATH
+ENTRYPOINT ["/bin/bash", "-c", \
+  "source /opt/ros/noetic/setup.bash && \
+   source $WS/devel/setup.bash && exec bash"]
