@@ -26,3 +26,4 @@ services:
       - ./output:/output
       - ./run_eval_ros1.sh:/run_eval_ros1.sh
       - ./record_mulran_input.sh:/record_mulran_input.sh
+      - ./extract-trajectory:/extract-trajectory

@@ -15,16 +15,19 @@ RUN pip3 install --no-cache-dir \
       "numpy<1.25.0" "scipy<1.11.0" evo
 
 # --- catkin workspace --------------------------------------------------------
+ENV DISABLE_ROS1_EOL_WARNINGS=1
 ENV WS=/workspace/catkin_ws
 RUN mkdir -p $WS/src
 WORKDIR $WS/src
 
 # ---- clone sources ----------------------------------------------------------
 # SC-LIO-SAM (Noetic branch)
-RUN git clone --depth=1 https://github.com/jxxdyy/SC-LIO-SAM.git
+# RUN git clone --depth=1 https://github.com/jxxdyy/SC-LIO-SAM.git
+COPY SC-LIO-SAM/SC-LIO-SAM/ $WS/src/SC-LIO-SAM
 
 # MulRan file-player (Noetic branch)
-RUN git clone --branch noetic --depth=1 https://github.com/RPM-Robotics-Lab/file_player_mulran.git
+COPY file_player_mulran/ $WS/src/file_player_mulran
+# RUN git clone --branch noetic --depth=1 https://github.com/RPM-Robotics-Lab/file_player_mulran.git
 
 # (optional) any extra packages here …
 
