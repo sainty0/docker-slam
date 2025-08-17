@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 
 # evo (works the same in ROS 1)
 RUN pip3 install --no-cache-dir \
-      "numpy<1.25.0" "scipy<1.11.0" evo
+      "numpy==1.24.4" "scipy==1.10.1" "matplotlib==3.7.5" evo
 
 # --- catkin workspace --------------------------------------------------------
 ENV DISABLE_ROS1_EOL_WARNINGS=1
