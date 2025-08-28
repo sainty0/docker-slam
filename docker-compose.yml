@@ -25,6 +25,7 @@ services:
       - /home/santiago/Downloads/mulran/:/data/mulran
       - ./output:/output
       - ./run_eval_ros1.sh:/run_eval_ros1.sh
+      - ./run_sweep.sh:/run_sweep.sh
       - ./odom_to_tum.py:/odom_to_tum.py
       - ./record_mulran_input.sh:/record_mulran_input.sh
       - ./extract-trajectory:/extract-trajectory

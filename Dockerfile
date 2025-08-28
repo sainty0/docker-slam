@@ -10,6 +10,12 @@ RUN apt-get update && apt-get install -y \
     libpcl-dev libgeographic-dev     \
  && rm -rf /var/lib/apt/lists/*
 
+# Install yq v4 (YAML processor)
+RUN wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 \
+    -O /usr/bin/yq && \
+    chmod +x /usr/bin/yq && \
+    yq --version
+
 # evo (works the same in ROS 1)
 RUN pip3 install --no-cache-dir \
       "numpy==1.24.4" "scipy==1.10.1" "matplotlib==3.7.5" evo
