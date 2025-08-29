@@ -14,7 +14,7 @@ export LC_ALL=C
 SEQ="KAIST01"                         # MulRan sequence folder name
 SEQ_ROOT="/data/mulran"               # Where MulRan sequences live
 RATE=1.0                              # Playback rate (1× realtime)
-DURATION=60                           # Seconds to run player/SLAM (ignored with -F)
+DURATION=160                           # Seconds to run player/SLAM (ignored with -F)
 OUT_ROOT="/output"                    # Top-level folder for logs & bags
 
 # Topics / files
@@ -29,6 +29,7 @@ RECORD_SLACK=10
 PARAMS_FILE=""                        # Provided via -P
 LABEL="base"                          # Human-friendly label via -L
 FULL_SEQ=0                            # -F -> run full sequence
+SWEEP_ID="${SWEEP_ID:-}"  # set by run_sweep.sh; optional
 ### ────────────────────────────────────────────────────────────────────────────
 
 usage() {
@@ -78,6 +79,8 @@ command -v rosrun   >/dev/null 2>&1 || { echo "[ERROR] rosrun not found"; exit 1
 command -v rosbag   >/dev/null 2>&1 || { echo "[ERROR] rosbag not found"; exit 1; }
 command -v evo_ape  >/dev/null 2>&1 || { echo "[ERROR] evo_ape not found"; exit 1; }
 command -v python3  >/dev/null 2>&1 || { echo "[ERROR] python3 not found"; exit 1; }
+command -v yq       >/dev/null || { echo "[ERROR] yq v4 is required"; exit 1; }
+
 
 if [ ! -f "$ODOM_TO_TUM" ]; then
   echo "[ERROR] odom_to_tum.py not found at: $ODOM_TO_TUM"
@@ -115,20 +118,18 @@ EST_TUM="${RUN_DIR}/${run_base}.tum"
 
 mkdir -p "$RUN_DIR" "$BAG_DIR"
 
+RESULTS_CSV="${OUT_ROOT}/logs/results_v2.csv"     # new schema
+RESULTS_JSONL="${OUT_ROOT}/logs/results.jsonl"    # newline-delimited JSON
+
 # Global results CSV
-RESULTS_CSV="${OUT_ROOT}/logs/results.csv"
 if [ ! -f "$RESULTS_CSV" ]; then
-  echo "timestamp,seq,label,param_hash,rate,duration_s,full_seq,ape_rmse_m,ape_sse,rpe_trans_1m_rmse_m,rpe_trans_1s_rmse_m,rpe_rot_1s_rmse_deg,run_dir,est_bag,est_tum" > "$RESULTS_CSV"
+  echo "timestamp,seq,label,param_hash,rate,duration_s,full_seq,sweep_id,ape_rmse_m,ape_sse,rpe_trans_1m_rmse_m,rpe_trans_1s_rmse_m,rpe_rot_1s_rmse_deg,odom_surf_leaf,mapping_corner_leaf,mapping_surf_leaf,edge_min_valid,surf_min_valid,edge_threshold,surf_threshold,run_dir,est_bag,est_tum" > "$RESULTS_CSV"
 fi
 
 echo "[INFO  $(date +%F' '%T)] Starting evaluation on ${SEQ} (${safe_label})"
-if [[ $FULL_SEQ -eq 1 ]]; then
-  echo "[INFO] Mode: full-sequence (no timeout)"
-else
-  echo "[INFO] Mode: fixed duration = ${DURATION}s"
-fi
-echo "[INFO] Output directory: $RUN_DIR"
-[[ -n "$PARAMS_FILE" ]] && echo "[INFO] Params: $PARAMS_FILE (hash=${PARAM_HASH})"
+[[ $FULL_SEQ -eq 1 ]] && echo "[INFO] Mode: full-sequence" || echo "[INFO] Mode: fixed duration = ${DURATION}s"
+[[ -n "$PARAMS_FILE" ]] && echo "[INFO] Params: $PARAMS_FILE (hash=$PARAM_HASH)"
+[[ -n "$SWEEP_ID" ]] && echo "[INFO] Sweep: $SWEEP_ID"
 
 ###############################################################################
 # Clean-up helper – gets invoked on EXIT, INT or TERM
@@ -264,10 +265,11 @@ if [ ! -f "${EST_BAG}" ]; then
   echo "[WARN] Bag not found: ${EST_BAG} (continuing; TUM path may still be valid)"
 fi
 
+EST_TUM_OK=1
 if [ ! -s "${EST_TUM}" ]; then
   echo "[ERROR] Expected TUM not found or empty: ${EST_TUM}"
   echo "        Check ${RUN_DIR}/odom_to_tum.log."
-  exit 2
+  EST_TUM_OK=0
 fi
 
 ###############################################################################
@@ -304,8 +306,29 @@ RPE1M_RMSE=$(get_last_val rmse "${RUN_DIR}/evo_rpe_trans_1m.log")
 RPE1S_RMSE=$(get_last_val rmse "${RUN_DIR}/evo_rpe_trans_1s.log")
 RPEROT_RMSE=$(get_last_val rmse "${RUN_DIR}/evo_rpe_rot_1s.log")
 
+start_wall=${start_wall:-$(date +%s)}  
 end_wall=$(date +%s)
 wall_secs=$((end_wall - start_wall))
+
+params_yaml=""
+if [[ -n "$PARAMS_FILE" ]]; then
+  params_yaml="$PARAMS_FILE"
+elif [[ -s "${RUN_DIR}/params_injected.yaml" ]]; then
+  params_yaml="${RUN_DIR}/params_injected.yaml"
+elif [[ -s "${RUN_DIR}/lio_sam_params.yaml" ]]; then
+  params_yaml="${RUN_DIR}/lio_sam_params.yaml"
+fi
+
+read_param() { local key="$1"; [[ -n "$params_yaml" ]] && yq e "$key // \"\"" "$params_yaml" 2>/dev/null || echo ""; }
+
+OD_LEAF=$(read_param '.lio_sam.odometrySurfLeafSize')
+MC_LEAF=$(read_param '.lio_sam.mappingCornerLeafSize')
+MS_LEAF=$(read_param '.lio_sam.mappingSurfLeafSize')
+EDGE_MIN=$(read_param '.lio_sam.edgeFeatureMinValidNum')
+SURF_MIN=$(read_param '.lio_sam.surfFeatureMinValidNum')
+EDGE_THR=$(read_param '.lio_sam.edgeThreshold')
+SURF_THR=$(read_param '.lio_sam.surfThreshold')
+
 
 num_or_null () { v="$1"; [[ -z "${v:-}" ]] && echo null || echo "$v"; }
 cat > "${RUN_DIR}/metrics.json" <<JSON
@@ -314,6 +337,7 @@ cat > "${RUN_DIR}/metrics.json" <<JSON
   "seq": "${SEQ}",
   "label": "${safe_label}",
   "param_hash": "${PARAM_HASH}",
+  "sweep_id": "${SWEEP_ID}",
   "rate": ${RATE},
   "duration_s": ${DURATION},
   "full_seq": ${FULL_SEQ},
@@ -325,11 +349,28 @@ cat > "${RUN_DIR}/metrics.json" <<JSON
   "run_dir": "${RUN_DIR}",
   "est_bag": "${EST_BAG}",
   "est_tum": "${EST_TUM}",
-  "wall_time_s": ${wall_secs}
+  "wall_time_s": ${wall_secs},
+  "params": {
+    "odometrySurfLeafSize": $(num_or_null "$OD_LEAF"),
+    "mappingCornerLeafSize": $(num_or_null "$MC_LEAF"),
+    "mappingSurfLeafSize": $(num_or_null "$MS_LEAF"),
+    "edgeFeatureMinValidNum": $(num_or_null "$EDGE_MIN"),
+    "surfFeatureMinValidNum": $(num_or_null "$SURF_MIN"),
+    "edgeThreshold": $(num_or_null "$EDGE_THR"),
+    "surfThreshold": $(num_or_null "$SURF_THR")
+  }
 }
 JSON
 
-echo "${timestamp},${SEQ},${safe_label},${PARAM_HASH},${RATE},${DURATION},${FULL_SEQ},${APE_RMSE:-},${APE_SSE:-},${RPE1M_RMSE:-},${RPE1S_RMSE:-},${RPEROT_RMSE:-},${RUN_DIR},${EST_BAG},${EST_TUM}" >> "$RESULTS_CSV"
+echo "${timestamp},${SEQ},${safe_label},${PARAM_HASH},${RATE},${DURATION},${FULL_SEQ},${SWEEP_ID:-},${APE_RMSE:-},${APE_SSE:-},${RPE1M_RMSE:-},${RPE1S_RMSE:-},${RPEROT_RMSE:-},${OD_LEAF},${MC_LEAF},${MS_LEAF},${EDGE_MIN},${SURF_MIN},${EDGE_THR},${SURF_THR},${RUN_DIR},${EST_BAG},${EST_TUM}" >> "$RESULTS_CSV"
+
+python3 - <<'PY' >> "$RESULTS_JSONL"
+import json,sys
+p = json.load(open(sys.argv[1])) if len(sys.argv)>1 else None
+# When invoked as here-doc, just read the file we know
+PY "${RUN_DIR}/metrics.json"
+python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1]))))' \
+  "${RUN_DIR}/metrics.json" >> "$RESULTS_JSONL"
 
 echo ""
 echo "✅  Evaluation completed"

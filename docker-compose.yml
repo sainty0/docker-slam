@@ -27,5 +27,6 @@ services:
       - ./run_eval_ros1.sh:/run_eval_ros1.sh
       - ./run_sweep.sh:/run_sweep.sh
       - ./odom_to_tum.py:/odom_to_tum.py
+      - ./helpers/:/helpers
       - ./record_mulran_input.sh:/record_mulran_input.sh
       - ./extract-trajectory:/extract-trajectory

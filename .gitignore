@@ -24,6 +24,7 @@ __pycache__/
 /data/bags/
 output/bags/
 output/results/
+output/results_v2/
 output/logs/
 
 # Launch-generated stuff
