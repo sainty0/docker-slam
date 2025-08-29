@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
-# Evaluate SC-LIO-SAM on a MulRan sequence using the headless file player,
+# Evaluate SC-LIO-SAM on a MulRan sequence using a headless file player,
 # export odometry to TUM via /odom_to_tum.py, then compute APE/RPE with evo.
-# Now supports dynamic parameter files and nicer run naming.
+# Writes a tidy CSV row for EVERY run (even if TUM is missing), so sweeps
+# reflect actual parameter variation. Also emits metrics.json and JSONL.
 #
 # ROS1 version.
 #
@@ -10,11 +11,11 @@
 set -euo pipefail
 export LC_ALL=C
 
-### ──────────────────────────────── configurable defaults ─────────────────────
+### ─────────────────────────────── configurable defaults ──────────────────────
 SEQ="KAIST01"                         # MulRan sequence folder name
 SEQ_ROOT="/data/mulran"               # Where MulRan sequences live
 RATE=1.0                              # Playback rate (1× realtime)
-DURATION=160                           # Seconds to run player/SLAM (ignored with -F)
+DURATION=160                          # Seconds to run player/SLAM (ignored with -F)
 OUT_ROOT="/output"                    # Top-level folder for logs & bags
 
 # Topics / files
@@ -29,7 +30,7 @@ RECORD_SLACK=10
 PARAMS_FILE=""                        # Provided via -P
 LABEL="base"                          # Human-friendly label via -L
 FULL_SEQ=0                            # -F -> run full sequence
-SWEEP_ID="${SWEEP_ID:-}"  # set by run_sweep.sh; optional
+SWEEP_ID="${SWEEP_ID:-}"              # set by run_sweep.sh; optional
 ### ────────────────────────────────────────────────────────────────────────────
 
 usage() {
@@ -69,60 +70,46 @@ while getopts ":s:r:t:Fo:d:G:p:P:L:h" opt; do
 done
 
 seq_dir="${SEQ_ROOT}/${SEQ}"
-if [ ! -d "$seq_dir" ]; then
-  echo "[ERROR] Sequence directory not found: ${seq_dir}"
-  exit 1
-fi
+[ -d "$seq_dir" ] || { echo "[ERROR] Sequence directory not found: ${seq_dir}"; exit 1; }
 
 command -v roslaunch >/dev/null 2>&1 || { echo "[ERROR] roslaunch not found"; exit 1; }
 command -v rosrun   >/dev/null 2>&1 || { echo "[ERROR] rosrun not found"; exit 1; }
 command -v rosbag   >/dev/null 2>&1 || { echo "[ERROR] rosbag not found"; exit 1; }
 command -v evo_ape  >/dev/null 2>&1 || { echo "[ERROR] evo_ape not found"; exit 1; }
 command -v python3  >/dev/null 2>&1 || { echo "[ERROR] python3 not found"; exit 1; }
-command -v yq       >/dev/null || { echo "[ERROR] yq v4 is required"; exit 1; }
+command -v yq       >/dev/null 2>&1 || { echo "[ERROR] yq v4 is required"; exit 1; }
 
-
-if [ ! -f "$ODOM_TO_TUM" ]; then
-  echo "[ERROR] odom_to_tum.py not found at: $ODOM_TO_TUM"
-  exit 1
-fi
+[ -f "$ODOM_TO_TUM" ] || { echo "[ERROR] odom_to_tum.py not found at: $ODOM_TO_TUM"; exit 1; }
 
 GT_TUM="${GT_TUM_ROOT}/${SEQ}_gt.tum"
-if [ ! -f "$GT_TUM" ]; then
-  echo "[ERROR] GT TUM not found at: $GT_TUM"
-  echo "        Provide ${SEQ}_gt.tum in ${GT_TUM_ROOT} or use -G to point to the dir."
-  exit 1
-fi
+[ -f "$GT_TUM" ] || { echo "[ERROR] GT TUM not found at: $GT_TUM"; exit 1; }
 
-# Short content hash of params file (or 'default' if none)
+# Params file hash (or 'default')
 if [[ -n "$PARAMS_FILE" ]]; then
-  if [ ! -f "$PARAMS_FILE" ]; then
-    echo "[ERROR] Params file not found: $PARAMS_FILE"; exit 1
-  fi
+  [ -f "$PARAMS_FILE" ] || { echo "[ERROR] Params file not found: $PARAMS_FILE"; exit 1; }
   PARAM_HASH=$(sha1sum "$PARAMS_FILE" | awk '{print $1}' | cut -c1-8)
 else
   PARAM_HASH="default"
 fi
 
-# Sanitize label: keep A–Z a–z 0–9 . _ + % -
+# Safe label and run naming
 safe_label=$(printf '%s' "$LABEL" | sed -E 's/[^A-Za-z0-9._+%-]+/_/g; s/^_+|_+$//g')
-
 timestamp=$(date +%Y%m%d-%H%M%S)
 run_base="${SEQ}_${safe_label}_${PARAM_HASH}_${timestamp}"
 
 RUN_DIR="${OUT_ROOT}/logs/${run_base}"
 BAG_DIR="${OUT_ROOT}/bags"
+mkdir -p "$RUN_DIR" "$BAG_DIR"
 
 EST_BAG="${BAG_DIR}/${run_base}.bag"
 EST_TUM="${RUN_DIR}/${run_base}.tum"
 
-mkdir -p "$RUN_DIR" "$BAG_DIR"
+RESULTS_CSV="${OUT_ROOT}/logs/results_v2.csv"
+RESULTS_JSONL="${OUT_ROOT}/logs/results.jsonl"
 
-RESULTS_CSV="${OUT_ROOT}/logs/results_v2.csv"     # new schema
-RESULTS_JSONL="${OUT_ROOT}/logs/results.jsonl"    # newline-delimited JSON
-
-# Global results CSV
+# Create CSV header if absent (SHORT column names)
 if [ ! -f "$RESULTS_CSV" ]; then
+  mkdir -p "$(dirname "$RESULTS_CSV")"
   echo "timestamp,seq,label,param_hash,rate,duration_s,full_seq,sweep_id,ape_rmse_m,ape_sse,rpe_trans_1m_rmse_m,rpe_trans_1s_rmse_m,rpe_rot_1s_rmse_deg,odom_surf_leaf,mapping_corner_leaf,mapping_surf_leaf,edge_min_valid,surf_min_valid,edge_threshold,surf_threshold,run_dir,est_bag,est_tum" > "$RESULTS_CSV"
 fi
 
@@ -132,7 +119,7 @@ echo "[INFO  $(date +%F' '%T)] Starting evaluation on ${SEQ} (${safe_label})"
 [[ -n "$SWEEP_ID" ]] && echo "[INFO] Sweep: $SWEEP_ID"
 
 ###############################################################################
-# Clean-up helper – gets invoked on EXIT, INT or TERM
+# Clean-up helper – invoked on EXIT, INT or TERM
 ###############################################################################
 PIDS=()
 cleanup() {
@@ -151,16 +138,12 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 ###############################################################################
-# 1) Launch SC-LIO-SAM (this starts roscore implicitly), loading params if given
+# 1) Launch SC-LIO-SAM (starts roscore), loading params if provided
 ###############################################################################
 echo "🧠  [1/6] Launching SC-LIO-SAM…"
-
 LAUNCH_ARGS=()
-if [[ -n "$PARAMS_FILE" ]]; then
-  LAUNCH_ARGS+=( "params_file:=${PARAMS_FILE}" )
-fi
+[[ -n "$PARAMS_FILE" ]] && LAUNCH_ARGS+=( "params_file:=${PARAMS_FILE}" )
 LAUNCH_ARGS+=( "use_sim_time:=true" )
-
 roslaunch lio_sam run_mulran.launch "${LAUNCH_ARGS[@]}" \
   > >(tee "${RUN_DIR}/sc_lio.log") 2>&1 &
 PIDS+=($!)
@@ -177,7 +160,6 @@ rosparam get /lio_sam > "${RUN_DIR}/lio_sam_params.yaml" 2>/dev/null || true
 ###############################################################################
 echo "🚀  [2/6] Playing MulRan sequence from ${seq_dir} at ${RATE}×…"
 PLAYER_LOG="${RUN_DIR}/player.log"
-
 if [[ $FULL_SEQ -eq 1 ]]; then
   rosrun file_player file_player_headless --dir "$seq_dir" --rate "$RATE" \
     > >(tee "$PLAYER_LOG") 2>&1 &
@@ -261,10 +243,7 @@ if [ -f "${EST_BAG}.active" ] && [ ! -f "${EST_BAG}" ]; then
   fi
 fi
 
-if [ ! -f "${EST_BAG}" ]; then
-  echo "[WARN] Bag not found: ${EST_BAG} (continuing; TUM path may still be valid)"
-fi
-
+# TUM presence check (NO EARLY EXIT — we still log the run)
 EST_TUM_OK=1
 if [ ! -s "${EST_TUM}" ]; then
   echo "[ERROR] Expected TUM not found or empty: ${EST_TUM}"
@@ -273,43 +252,47 @@ if [ ! -s "${EST_TUM}" ]; then
 fi
 
 ###############################################################################
-# 6) Evaluate with evo (APE + RPE), then write metrics.json + results.csv
+# 6) Evaluate with evo (APE + RPE), then write metrics.json + CSV/JSONL
 ###############################################################################
-echo "📊  [6/6] Evaluating with evo (GT=${GT_TUM}, EST=${EST_TUM})…"
+if [ "$EST_TUM_OK" -eq 1 ]; then
+  echo "📊  [6/6] Evaluating with evo (GT=${GT_TUM}, EST=${EST_TUM})…"
+  evo_ape tum "${GT_TUM}" "${EST_TUM}" \
+    -va --save_results "${RUN_DIR}/ape.zip" --save_plot "${RUN_DIR}/ape.png" \
+    > "${RUN_DIR}/evo_ape.log" 2>&1 || echo "[ERROR] evo_ape failed"
 
-evo_ape tum "${GT_TUM}" "${EST_TUM}" \
-  -va --save_results "${RUN_DIR}/ape.zip" --save_plot "${RUN_DIR}/ape.png" \
-  > "${RUN_DIR}/evo_ape.log" 2>&1 || echo "[ERROR] evo_ape failed"
+  evo_rpe tum "${GT_TUM}" "${EST_TUM}" \
+    -va -r trans_part --delta 1 --delta_unit m \
+    --save_results "${RUN_DIR}/rpe_trans_1m.zip" \
+    --save_plot "${RUN_DIR}/rpe_trans_1m.png" \
+    > "${RUN_DIR}/evo_rpe_trans_1m.log" 2>&1 || echo "[ERROR] evo_rpe (trans/1m) failed"
 
-evo_rpe tum "${GT_TUM}" "${EST_TUM}" \
-  -va -r trans_part --delta 1 --delta_unit m \
-  --save_results "${RUN_DIR}/rpe_trans_1m.zip" \
-  --save_plot "${RUN_DIR}/rpe_trans_1m.png" \
-  > "${RUN_DIR}/evo_rpe_trans_1m.log" 2>&1 || echo "[ERROR] evo_rpe (trans/1m) failed"
+  evo_rpe tum "${GT_TUM}" "${EST_TUM}" \
+    -va -r trans_part --delta 1 --delta_unit m \
+    --save_results "${RUN_DIR}/rpe_trans_1s.zip" \
+    --save_plot "${RUN_DIR}/rpe_trans_1s.png" \
+    > "${RUN_DIR}/evo_rpe_trans_1s.log" 2>&1 || echo "[ERROR] evo_rpe (trans/1s) failed"
 
-evo_rpe tum "${GT_TUM}" "${EST_TUM}" \
-  -va -r trans_part --delta 1 --delta_unit m \
-  --save_results "${RUN_DIR}/rpe_trans_1s.zip" \
-  --save_plot "${RUN_DIR}/rpe_trans_1s.png" \
-  > "${RUN_DIR}/evo_rpe_trans_1s.log" 2>&1 || echo "[ERROR] evo_rpe (trans/1s) failed"
+  evo_rpe tum "${GT_TUM}" "${EST_TUM}" \
+    -va -r angle_deg --delta 1 --delta_unit m \
+    --save_results "${RUN_DIR}/rpe_rot_1s.zip" \
+    --save_plot "${RUN_DIR}/rpe_rot_1s.png" \
+    > "${RUN_DIR}/evo_rpe_rot_1s.log" 2>&1 || echo "[ERROR] evo_rpe (rot/1s) failed"
+else
+  echo "[WARN] Skipping evo metrics because EST TUM is missing."
+fi
 
-evo_rpe tum "${GT_TUM}" "${EST_TUM}" \
-  -va -r angle_deg --delta 1 --delta_unit m \
-  --save_results "${RUN_DIR}/rpe_rot_1s.zip" \
-  --save_plot "${RUN_DIR}/rpe_rot_1s.png" \
-  > "${RUN_DIR}/evo_rpe_rot_1s.log" 2>&1 || echo "[ERROR] evo_rpe (rot/1s) failed"
-
+# Metrics extraction (files may not exist; getters will yield empty)
 get_last_val () { local key="$1" file="$2"; awk -v k="$key" 'tolower($0) ~ k {print $2}' "$file" 2>/dev/null | tail -n1; }
-APE_RMSE=$(get_last_val rmse "${RUN_DIR}/evo_ape.log")
-APE_SSE=$(get_last_val sse  "${RUN_DIR}/evo_ape.log")
-RPE1M_RMSE=$(get_last_val rmse "${RUN_DIR}/evo_rpe_trans_1m.log")
-RPE1S_RMSE=$(get_last_val rmse "${RUN_DIR}/evo_rpe_trans_1s.log")
-RPEROT_RMSE=$(get_last_val rmse "${RUN_DIR}/evo_rpe_rot_1s.log")
+APE_RMSE=$(get_last_val rmse "${RUN_DIR}/evo_ape.log" || true)
+APE_SSE=$(get_last_val sse  "${RUN_DIR}/evo_ape.log" || true)
+RPE1M_RMSE=$(get_last_val rmse "${RUN_DIR}/evo_rpe_trans_1m.log" || true)
+RPE1S_RMSE=$(get_last_val rmse "${RUN_DIR}/evo_rpe_trans_1s.log" || true)
+RPEROT_RMSE=$(get_last_val rmse "${RUN_DIR}/evo_rpe_rot_1s.log" || true)
 
-start_wall=${start_wall:-$(date +%s)}  
 end_wall=$(date +%s)
 wall_secs=$((end_wall - start_wall))
 
+# Select a params YAML to read back values for logging
 params_yaml=""
 if [[ -n "$PARAMS_FILE" ]]; then
   params_yaml="$PARAMS_FILE"
@@ -320,7 +303,6 @@ elif [[ -s "${RUN_DIR}/lio_sam_params.yaml" ]]; then
 fi
 
 read_param() { local key="$1"; [[ -n "$params_yaml" ]] && yq e "$key // \"\"" "$params_yaml" 2>/dev/null || echo ""; }
-
 OD_LEAF=$(read_param '.lio_sam.odometrySurfLeafSize')
 MC_LEAF=$(read_param '.lio_sam.mappingCornerLeafSize')
 MS_LEAF=$(read_param '.lio_sam.mappingSurfLeafSize')
@@ -329,8 +311,12 @@ SURF_MIN=$(read_param '.lio_sam.surfFeatureMinValidNum')
 EDGE_THR=$(read_param '.lio_sam.edgeThreshold')
 SURF_THR=$(read_param '.lio_sam.surfThreshold')
 
-
 num_or_null () { v="$1"; [[ -z "${v:-}" ]] && echo null || echo "$v"; }
+
+# Optional status string (not in CSV schema; only in JSON)
+STATUS="ok"; [ "$EST_TUM_OK" -eq 1 ] || STATUS="no_tum"
+
+# metrics.json
 cat > "${RUN_DIR}/metrics.json" <<JSON
 {
   "timestamp": "${timestamp}",
@@ -341,6 +327,7 @@ cat > "${RUN_DIR}/metrics.json" <<JSON
   "rate": ${RATE},
   "duration_s": ${DURATION},
   "full_seq": ${FULL_SEQ},
+  "status": "${STATUS}",
   "ape_rmse_m": $(num_or_null "$APE_RMSE"),
   "ape_sse": $(num_or_null "$APE_SSE"),
   "rpe_trans_1m_rmse_m": $(num_or_null "$RPE1M_RMSE"),
@@ -362,21 +349,19 @@ cat > "${RUN_DIR}/metrics.json" <<JSON
 }
 JSON
 
+# Append tidy CSV row (metrics may be blank if no TUM)
 echo "${timestamp},${SEQ},${safe_label},${PARAM_HASH},${RATE},${DURATION},${FULL_SEQ},${SWEEP_ID:-},${APE_RMSE:-},${APE_SSE:-},${RPE1M_RMSE:-},${RPE1S_RMSE:-},${RPEROT_RMSE:-},${OD_LEAF},${MC_LEAF},${MS_LEAF},${EDGE_MIN},${SURF_MIN},${EDGE_THR},${SURF_THR},${RUN_DIR},${EST_BAG},${EST_TUM}" >> "$RESULTS_CSV"
 
-python3 - <<'PY' >> "$RESULTS_JSONL"
-import json,sys
-p = json.load(open(sys.argv[1])) if len(sys.argv)>1 else None
-# When invoked as here-doc, just read the file we know
-PY "${RUN_DIR}/metrics.json"
-python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1]))))' \
-  "${RUN_DIR}/metrics.json" >> "$RESULTS_JSONL"
+# Append JSONL (one line per run)
+mkdir -p "$(dirname "$RESULTS_JSONL")"
+cat "${RUN_DIR}/metrics.json" >> "$RESULTS_JSONL"
+echo "" >> "$RESULTS_JSONL"
 
 echo ""
 echo "✅  Evaluation completed"
 echo "📝  Logs    → ${RUN_DIR}"
 echo "📦  Bag     → ${EST_BAG}"
-echo "🧾  EST TUM → ${EST_TUM}"
+echo "🧾  EST TUM → ${EST_TUM} (status=${STATUS})"
 echo "🎯  GT  TUM → ${GT_TUM}"
 echo "📊  APE     → ${RUN_DIR}/ape.{zip,png}"
 echo "📈  Metrics → ${RUN_DIR}/metrics.json"
