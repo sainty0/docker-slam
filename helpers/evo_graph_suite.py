@@ -73,12 +73,29 @@ def save_table(df: pd.DataFrame, path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(path, index=False)
 
+def plot_raw_error_scatter(x_vals, y_vals, title, xlabel, ylabel, out_path: Path, jitter=True, seed=0):
+    """Scatter of raw metric values vs a parameter, with slight x-jitter to reduce overlap."""
+    x_vals = np.asarray(x_vals, dtype=float)
+    y_vals = np.asarray(y_vals, dtype=float)
 
-def plot_line_with_errorbars(x_vals, y_mean, y_std, title, xlabel, ylabel, out_path: Path):
+    # Drop NaNs so matplotlib doesn't choke
+    m = np.isfinite(x_vals) & np.isfinite(y_vals)
+    x_vals = x_vals[m]
+    y_vals = y_vals[m]
+
+    if len(x_vals) == 0:
+        return
+
+    if jitter:
+        rng = np.random.default_rng(seed)
+        span = np.nanmax(x_vals) - np.nanmin(x_vals)
+        width = (span if span > 0 else 1.0) * 0.01  # ~1% of span
+        x_plot = x_vals + rng.uniform(-width, width, size=x_vals.shape)
+    else:
+        x_plot = x_vals
+
     plt.figure()
-    # Avoid NaNs (matplotlib errorbar doesn't like all-NaN std)
-    y_std = np.nan_to_num(y_std, nan=0.0)
-    plt.errorbar(x_vals, y_mean, yerr=y_std, marker="o")
+    plt.scatter(x_plot, y_vals, alpha=0.45, s=18)
     plt.title(title)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
@@ -86,6 +103,36 @@ def plot_line_with_errorbars(x_vals, y_mean, y_std, title, xlabel, ylabel, out_p
     out_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(out_path, dpi=160)
     plt.close()
+
+
+# def plot_line_with_errorbars(x_vals, y_mean, y_std, title, xlabel, ylabel, out_path: Path):
+def plot_line_with_errorbars(x_vals, y_mean, y_std, title, xlabel, ylabel, out_path: Path):
+    plt.figure()
+    y_std = np.nan_to_num(y_std, nan=0.0)
+
+    plt.plot(x_vals, y_mean, marker="o", label="median")
+    plt.fill_between(x_vals, y_mean - y_std, y_mean + y_std, alpha=0.3, label="±1 std dev")
+
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.legend()
+    plt.tight_layout()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(out_path, dpi=160)
+    plt.close()
+
+    # plt.figure()
+    # # Avoid NaNs (matplotlib errorbar doesn't like all-NaN std)
+    # y_std = np.nan_to_num(y_std, nan=0.0)
+    # plt.errorbar(x_vals, y_mean, yerr=y_std, marker="o")
+    # plt.title(title)
+    # plt.xlabel(xlabel)
+    # plt.ylabel(ylabel)
+    # plt.tight_layout()
+    # out_path.parent.mkdir(parents=True, exist_ok=True)
+    # plt.savefig(out_path, dpi=160)
+    # plt.close()
 
 
 def plot_heatmap(x_labels, y_labels, grid, title, xlabel, ylabel, out_path: Path):
@@ -161,6 +208,14 @@ def main():
             xlabel=p, ylabel=args.metric,
             out_path=per_param_global_dir / f"{p}.png",
         )
+        plot_raw_error_scatter(
+            x_vals=df[p].values,
+            y_vals=df[args.metric].values,
+            title=f"Raw {args.metric} vs {p} (all runs)",
+            xlabel=p, ylabel=args.metric,
+            out_path=per_param_global_dir / f"{p}__raw_scatter.png",
+        )
+
 
     # Per-parameter: control groups where all other params are fixed
     per_param_dir = out_root / "per_param"
@@ -204,6 +259,14 @@ def main():
                 xlabel=p, ylabel=args.metric,
                 out_path=group_dir / "plot.png",
             )
+            plot_raw_error_scatter(
+                x_vals=sub[p].values,
+                y_vals=sub[args.metric].values,
+                title=f"Raw {args.metric} vs {p}\n(fixed: {group_id})",
+                xlabel=p, ylabel=args.metric,
+                out_path=group_dir / "raw_scatter.png",
+            )
+
 
     # Pairwise heatmaps (median metric)
     # Choose pairs with reasonable grid sizes to keep images readable
