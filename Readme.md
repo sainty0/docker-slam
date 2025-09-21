@@ -160,6 +160,102 @@ python3 /helpers/evo_graph_suite.py \
 ```
 
 
+## MulRan File Player: Stepper and Seek Tests (with visualization)
+
+Two helper test scripts are provided to validate and visually inspect the MulRan file player behavior. They can optionally launch SC-LIO-SAM (via roslaunch) and RViz so you can watch playback while the test runs.
+
+Location:
+- file_player_mulran/tests/step_test.py
+- file_player_mulran/tests/start_percent_test.py
+
+Prerequisites
+- Build and source your ROS workspace so these are available on PATH:
+  - roslaunch lio_sam run_mulran.launch
+  - rosrun file_player file_player_headless
+  - rosrun rviz rviz
+- MulRan sequence available under /data/mulran/<SEQ> (or pass your actual path via --dir)
+- Optional: an RViz config file if you want a preset layout
+
+Player capabilities referenced
+- Stepper mode (play N data stamps and stop): headless binary accepts --step N
+- Seek to percentage before starting: headless binary accepts --start-percent P (0..100)
+
+Examples
+1) Functional stepper test (no visualization)
+- Verifies that at least N messages are published across key topics when stepping:
+  python3 file_player_mulran/tests/step_test.py --dir /data/mulran/KAIST01 --step 5 --timeout 30
+
+2) Visual stepper test (launch SC-LIO-SAM + RViz)
+- Launches SLAM and RViz and keeps them running for 20s while stepping:
+```
+  python3 file_player_mulran/tests/step_test.py \
+    --dir /data/mulran/KAIST01 \
+    --step 50 \
+    --with-slam \
+    --params-file SC-LIO-SAM/SC-LIO-SAM/config/params_mulran.yaml \
+    --with-rviz \
+    --rviz-config SC-LIO-SAM/SC-LIO-SAM/doc/rviz/rviz.rviz \
+    --visualize-seconds 20
+```
+3) Functional seek-to-percent test (no visualization)
+- Seeks to 25% and publishes one stamp, then checks stamp against data_stamp.csv:
+  python3 file_player_mulran/tests/start_percent_test.py \
+    --dir /data/mulran/KAIST01 \
+    --pct 25 \
+    --timeout 30
+
+4) Visual seek-to-percent test (continuous playback)
+- Seeks to 25%, keeps playing for 30s while SLAM + RViz run:
+  python3 file_player_mulran/tests/start_percent_test.py \
+    --dir /data/mulran/KAIST01 \
+    --pct 25 \
+    --with-slam \
+    --with-rviz \
+    --visualize-seconds 30 \
+    --keep-playing
+
+Integrated visual test launcher
+- A single script that launches SC-LIO-SAM (roslaunch), waits for the ROS master, starts RViz, and launches the headless file player; then validates either steps or start-percent. This helps avoid "master not running yet" issues.
+
+Examples:
+- Step 50 entries with visualization for 20s:
+  python3 file_player_mulran/tests/visual_integration_test.py \
+    --dir /data/mulran/KAIST01 \
+    --step 50 \
+    --params-file SC-LIO-SAM/SC-LIO-SAM/config/params_mulran.yaml \
+    --rviz-config SC-LIO-SAM/SC-LIO-SAM/doc/rviz/rviz.rviz \
+    --visualize-seconds 20
+
+- If you still see "master not running", start a private roscore first:
+  python3 file_player_mulran/tests/visual_integration_test.py \
+    --dir /data/mulran/KAIST01 \
+    --step 50 \
+    --params-file SC-LIO-SAM/SC-LIO-SAM/config/params_mulran.yaml \
+    --rviz-config SC-LIO-SAM/SC-LIO-SAM/doc/rviz/rviz.rviz \
+    --visualize-seconds 20 \
+    --roscore-first
+
+- Seek to 25% and keep playing for 30s:
+  python3 file_player_mulran/tests/visual_integration_test.py \
+    --dir /data/mulran/KAIST01 \
+    --pct 25 \
+    --keep-playing \
+    --params-file SC-LIO-SAM/SC-LIO-SAM/config/params_mulran.yaml \
+    --rviz-config SC-LIO-SAM/SC-LIO-SAM/doc/rviz/rviz.rviz \
+    --visualize-seconds 30
+
+Manual headless examples
+- Start at 25% and play continuously:
+  rosrun file_player file_player_headless --dir /data/mulran/KAIST01 --rate 1.0 --start-percent 25
+
+- Step 10 entries (data_stamp entries) and exit:
+  rosrun file_player file_player_headless --dir /data/mulran/KAIST01 --rate 1.0 --step 10
+
+Notes
+- When using --with-slam, roslaunch starts roscore; otherwise scripts start/stop a private roscore.
+- --params-file injects YAML into run_mulran.launch (e.g., SC-LIO-SAM/SC-LIO-SAM/config/params_mulran.yaml).
+- You can omit --rviz-config to use the default RViz layout.
+
 ## Dependencies
 
 Runtime (inside container):
