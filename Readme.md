@@ -7,6 +7,15 @@ The original shell scripts have been converted and refactored into a modular Pyt
 - Single-run evaluator (replacement for `run_eval_ros1.sh`)
 - OFAT sweep with replicates and optional parallel workers (replacement for `run_sweep.sh`)
 
+## Setup 
+### Clone Repo
+- git clone --recurse-submodules -b ros2 https://github.com/sainty0/docker-slam.git
+- cd docker-slam
+- git submodule update --init --recursive
+
+### Build Docker
+- docker compose build gtsam-base
+- docker compose build sc-lio
 
 ## Quickstart
 

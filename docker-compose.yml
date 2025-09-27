@@ -13,7 +13,6 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - gtsam-base
-    network_mode: host
     tty: true
     privileged: true
     environment:
@@ -22,7 +21,8 @@ services:
     volumes:
       - ${HOME}/.Xauthority:/root/.Xauthority:ro
       - /tmp/.X11-unix:/tmp/.X11-unix
-      - /home/santiago/Downloads/mulran/:/data/mulran
+      # UPDATE to your download folder directory
+      - /Users/sainty/Downloads/mulran/:/data/mulran:ro
       - ./output:/output
       - ./run_eval_ros1.sh:/run_eval_ros1.sh
       - ./run_sweep.sh:/run_sweep.sh
