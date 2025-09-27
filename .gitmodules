@@ -7,3 +7,11 @@
 [submodule "workspace/src/ros2bag_MulRan"]
 	path = workspace/src/ros2bag_MulRan
 	url = https://github.com/ros2/rosbag2.git
+[submodule "SC-LIO-SAM"]
+	path = SC-LIO-SAM
+	url = https://github.com/sainty0/SC-LIO-SAM.git
+	branch = main
+[submodule "file_player_mulran"]
+	path = file_player_mulran
+	url = https://github.com/sainty0/file_player_mulran.git
+	branch = noetic
