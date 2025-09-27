@@ -33,7 +33,10 @@ socat TCP-LISTEN:6000,reuseaddr,fork UNIX-CLIENT:"$DISPLAY"
 
 ### Start a shell in the container
 ```bash
-docker compose run --rm sc-lio bash
+# For linux 
+docker compose --profile linux run --rm sc-lio-linux
+# For mac
+docker compose --profile mac run --rm sc-lio-mac
 # or attach to a running one
 docker compose exec sc-lio bash
 ```
