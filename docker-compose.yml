@@ -1,5 +1,7 @@
 version: "3.9"
 
+volumes:
+  x11: {}
 
 x-sc-lio-common: &sc_lio_common
   build:
@@ -10,6 +12,7 @@ x-sc-lio-common: &sc_lio_common
   privileged: true
   volumes:
     # UPDATE to your download folder directory
+    - x11:/tmp/.X11-unix
     - ./mulran/:/data/mulran:ro
     - ./output:/output
     - ./run_eval_ros1.sh:/run_eval_ros1.sh
@@ -26,13 +29,28 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.gtsam.noetic
+  # Xquartz doesn't work on rviz use vnc on browser instead
+  novnc:
+    image: accetto/ubuntu-vnc-xfce:latest
+    environment:
+      - RESOLUTION=1600x900
+      - VNC_COL_DEPTH=24
+      - ENABLE_CRASHREPORTER=false
+      - TZ=UTC
+      - VNC_PW=123456
+    volumes:
+      - x11:/tmp/.X11-unix
+    ports:
+      - "8080:6901"
 
   sc-lio-mac:
     <<: *sc_lio_common
     profiles: ["mac"]
     environment:
-      - DISPLAY=host.docker.internal:0
+      - DISPLAY=:1
       - QT_X11_NO_MITSHM=1
+    depends_on:
+      - novnc
 
   sc-lio-linux:
     <<: *sc_lio_common
