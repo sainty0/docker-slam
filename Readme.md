@@ -13,6 +13,18 @@ The original shell scripts have been converted and refactored into a modular Pyt
 - cd docker-slam
 - git submodule update --init --recursive
 
+### Setup X11
+
+**For Mac**
+Follow this guide: https://gist.github.com/devnoname120/ce02ef43da968e15340427c2f1c286a7
+
+```
+# Run this once per login (or put it in a small script)
+export DISPLAY=:0
+# Install socat if you don’t have it: brew install socat
+socat TCP-LISTEN:6000,reuseaddr,fork UNIX-CLIENT:"$DISPLAY"
+
+```
 ### Build Docker
 - docker compose build gtsam-base
 - docker compose build sc-lio

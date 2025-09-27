@@ -1,4 +1,23 @@
 version: "3.9"
+x-sc-lio-common: &sc_lio_common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: slam-sc-lio:noetic
+  tty: true
+  privileged: true
+  volumes:
+    # UPDATE to your download folder directory
+    - ./mulran/:/data/mulran:ro
+    - ./output:/output
+    - ./run_eval_ros1.sh:/run_eval_ros1.sh
+    - ./run_sweep.sh:/run_sweep.sh
+    - ./odom_to_tum.py:/odom_to_tum.py
+    - ./helpers/:/helpers
+    - ./mulran_eval/:/mulran_eval
+    - ./record_mulran_input.sh:/record_mulran_input.sh
+    - ./extract-trajectory:/extract-trajectory
+
 services:
   gtsam-base:
     image: gtsam-base:noetic
@@ -7,26 +26,22 @@ services:
       dockerfile: Dockerfile.gtsam.noetic
 
   sc-lio:
-    image: slam-sc-lio:noetic
-    build:
-      context: .
-      dockerfile: Dockerfile
-    depends_on:
-      - gtsam-base
-    tty: true
-    privileged: true
+    <<: *sc_lio_common
+    profiles: ["mac", "linux"]
+
+  sc-lio-mac:
+    <<: *sc_lio_common
+    profiles: ["mac"]
+    environment:
+      - DISPLAY=host.docker.internal:0
+      - QT_X11_NO_MITSHM=1
+
+  sc-lio-linux:
+    <<: *sc_lio_common
+    profiles: ["linux"]
     environment:
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
     volumes:
       - ${HOME}/.Xauthority:/root/.Xauthority:ro
       - /tmp/.X11-unix:/tmp/.X11-unix
-      # UPDATE to your download folder directory
-      - /Users/sainty/Downloads/mulran/:/data/mulran:ro
-      - ./output:/output
-      - ./run_eval_ros1.sh:/run_eval_ros1.sh
-      - ./run_sweep.sh:/run_sweep.sh
-      - ./odom_to_tum.py:/odom_to_tum.py
-      - ./helpers/:/helpers
-      - ./record_mulran_input.sh:/record_mulran_input.sh
-      - ./extract-trajectory:/extract-trajectory
