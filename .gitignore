@@ -20,6 +20,9 @@ __pycache__/
 *.zip
 *.png
 
+# Mulran
+/mulran
+
 # ros2bag_MulRan outputs
 /data/bags/
 output/bags/
