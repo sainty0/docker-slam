@@ -1,4 +1,6 @@
 version: "3.9"
+
+
 x-sc-lio-common: &sc_lio_common
   build:
     context: .
@@ -25,10 +27,6 @@ services:
       context: .
       dockerfile: Dockerfile.gtsam.noetic
 
-  sc-lio:
-    <<: *sc_lio_common
-    profiles: ["mac", "linux"]
-
   sc-lio-mac:
     <<: *sc_lio_common
     profiles: ["mac"]
@@ -39,9 +37,20 @@ services:
   sc-lio-linux:
     <<: *sc_lio_common
     profiles: ["linux"]
+    network_mode: host
     environment:
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
     volumes:
       - ${HOME}/.Xauthority:/root/.Xauthority:ro
       - /tmp/.X11-unix:/tmp/.X11-unix
+      # UPDATE to your download folder directory
+      - ./mulran/:/data/mulran:ro
+      - ./output:/output
+      - ./run_eval_ros1.sh:/run_eval_ros1.sh
+      - ./run_sweep.sh:/run_sweep.sh
+      - ./odom_to_tum.py:/odom_to_tum.py
+      - ./helpers/:/helpers
+      - ./mulran_eval/:/mulran_eval
+      - ./record_mulran_input.sh:/record_mulran_input.sh
+      - ./extract-trajectory:/extract-trajectory
