@@ -27,7 +27,16 @@ KEY_COLS = [
 
 
 def aggregate_sweep(sweep_id: str, out_root: Path | None = None) -> pd.DataFrame:
-    runs, metrics = read_tables(out_root or Path("/output"))
+    root = out_root or Path("/output")
+    if not root.exists():
+        # Try local fallback if absolute root isn't available
+        try:
+            local = Path.cwd() / "output" / root.name
+            if local.exists():
+                root = local
+        except Exception:
+            pass
+    runs, metrics = read_tables(root)
     if runs.empty or metrics.empty:
         return pd.DataFrame()
 
@@ -48,7 +57,7 @@ def aggregate_sweep(sweep_id: str, out_root: Path | None = None) -> pd.DataFrame
     agg["reps"] = df.groupby(KEY_COLS, dropna=False).size().values
 
     # Write to Parquet
-    out_path = (out_root or Path("/output")).joinpath("logs", f"aggregates_{sweep_id}.parquet")
+    out_path = root.joinpath("logs", f"aggregates_{sweep_id}.parquet")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     agg.to_parquet(out_path, index=False)
     return agg

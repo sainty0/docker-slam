@@ -36,6 +36,21 @@ def run_once(cfg: RunConfig) -> RunRecord:
 
     base = f"{cfg.seq}_{slugify(cfg.label)}_{param_hash}_{ts.strftime('%Y%m%d-%H%M%S')}"
     out_root = Path(cfg.out_root)
+    # Ensure out_root exists; if creating an absolute like /output fails (e.g., permissions),
+    # fall back to a local ./output[/<suffix>] under the current working directory.
+    try:
+        out_root.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        local_base = Path.cwd() / "output"
+        try:
+            local_base.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        # Preserve the last component (e.g., "results_v8") if provided
+        suffix = Path(cfg.out_root).name or "logs"
+        out_root = local_base / suffix
+        out_root.mkdir(parents=True, exist_ok=True)
+
     run_dir = out_root / "logs" / base
     bag_dir = out_root / "bags"
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -147,5 +162,5 @@ def run_once(cfg: RunConfig) -> RunRecord:
         params=params,
         metrics=metrics,
     )
-    write_run(rec, Path(cfg.out_root))
+    write_run(rec, out_root)
     return rec

@@ -11,7 +11,7 @@ app = typer.Typer(add_completion=False, no_args_is_help=True)
 
 
 @app.command(help="Run a single evaluation (one sequence)")
-def evaluate(
+def eval(
     seq: str = typer.Argument(..., help="MulRan sequence name, e.g., KAIST01"),
     rate: float = typer.Option(1.0, help="Playback rate"),
     duration_s: int = typer.Option(160, help="Seconds to play when not full-seq"),
@@ -97,12 +97,15 @@ def sweep_ofat(
 
 
 @app.command(help="Aggregate a sweep into mean/std per config")
-def aggregate(sweep_id: str = typer.Argument(...)):
-    df = aggregate_sweep(sweep_id)
+def aggregate(
+    sweep_id: str = typer.Argument(...),
+    out_root: Path = typer.Option(Path("/output"), help="Output root to read/write Parquet logs"),
+):
+    df = aggregate_sweep(sweep_id, out_root)
     if df.empty:
         print("[yellow]No data found for that sweep_id.[/yellow]")
     else:
-        out = Path("/output").joinpath("logs", f"aggregates_{sweep_id}.parquet")
+        out = out_root.joinpath("logs", f"aggregates_{sweep_id}.parquet")
         print(f"[green]Wrote[/green] {out}  ([dim]{len(df)} rows[/dim])")
 
 

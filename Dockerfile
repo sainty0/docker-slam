@@ -4,6 +4,7 @@ FROM gtsam-base:noetic
 # --- ROS & build tools -------------------------------------------------------
 RUN apt-get update && apt-get install -y \
     python3-pip python3-catkin-tools \
+    build-essential python3-dev \
     ros-noetic-pcl-conversions ros-noetic-pcl-ros \
     ros-noetic-tf ros-noetic-rviz \
     ros-noetic-camera-info-manager \
@@ -19,6 +20,18 @@ RUN wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
 # evo (works the same in ROS 1)
 RUN pip3 install --no-cache-dir \
       "numpy==1.24.4" "scipy==1.10.1" "matplotlib==3.7.5" evo
+
+# --- Add the Python evaluation toolkit --------------------------------------
+# Copy only requirements first to leverage layer caching
+WORKDIR /app
+COPY requirements.txt /app/requirements.txt
+
+# Install requirements (upgrade pip, then install)
+RUN python3 -m pip install --upgrade pip && \
+    python3 -m pip install -r requirements.txt
+
+# Copy the toolkit code
+COPY mulran_eval/ /app/mulran_eval
 
 # --- catkin workspace --------------------------------------------------------
 ENV DISABLE_ROS1_EOL_WARNINGS=1

@@ -10,7 +10,7 @@ export LC_ALL=C
 # ─────────────────────────────────── config ───────────────────────────────────
 RUNNER=./run_eval_ros1.sh
 OUT_ROOT=/output/results_v8
-SEQ="Riverside01"
+SEQ="KAIST01"
 RATE=1.0
 DUR=300
 FULL_SEQ=0
