@@ -56,6 +56,9 @@ RUN /bin/bash -c "source /opt/ros/noetic/setup.bash && \
                   catkin_make -DCMAKE_BUILD_TYPE=Release"
 
 # ---- runtime ----------------------------------------------------------------
+RUN echo "source /opt/ros/noetic/setup.bash" >> /root/.bashrc && \
+    echo "source /workspace/catkin_ws/devel/setup.bash" >> /root/.bashrc
+
 ENV ROS_PACKAGE_PATH=$WS/src:$ROS_PACKAGE_PATH
 ENTRYPOINT ["/bin/bash", "-c", \
   "source /opt/ros/noetic/setup.bash && \
