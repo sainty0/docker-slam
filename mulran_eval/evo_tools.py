@@ -35,45 +35,46 @@ def _rmse(d: dict, key: str = "rmse") -> Optional[float]:
         return None
 
 
-def compute_metrics(gt_tum: Path, est_tum: Path, run_dir: Path) -> Optional[Metrics]:
+def compute_metrics(gt_tum: Path, est_tum: Path, out_dir: Path, log_dir: Optional[Path] = None) -> Optional[Metrics]:
     """Run evo_* tools and parse structured results from the saved ZIPs."""
-    run_dir.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    L = log_dir or out_dir
 
-    ape_zip = run_dir / "ape.zip"
-    rpe_1m_zip = run_dir / "rpe_trans_1m.zip"
-    rpe_1s_zip = run_dir / "rpe_trans_1s.zip"
-    rpe_rot_zip = run_dir / "rpe_rot_1s.zip"
+    ape_zip = out_dir / "ape.zip"
+    rpe_1m_zip = out_dir / "rpe_trans_1m.zip"
+    rpe_1s_zip = out_dir / "rpe_trans_1s.zip"
+    rpe_rot_zip = out_dir / "rpe_rot_1s.zip"
 
     # APE
     _run([
         "evo_ape", "tum", str(gt_tum), str(est_tum), "-va",
         "--save_results", str(ape_zip),
-        "--save_plot", str(run_dir/"ape.png"),
-    ], run_dir/"evo_ape.log")
+        "--save_plot", str(out_dir/"ape.png"),
+    ], L/"evo_ape.log")
 
     # RPE 1m
     _run([
         "evo_rpe", "tum", str(gt_tum), str(est_tum), "-va",
         "-r", "trans_part", "--delta", "1", "--delta_unit", "m",
         "--save_results", str(rpe_1m_zip),
-        "--save_plot", str(run_dir/"rpe_trans_1m.png"),
-    ], run_dir/"evo_rpe_trans_1m.log")
+        "--save_plot", str(out_dir/"rpe_trans_1m.png"),
+    ], L/"evo_rpe_trans_1m.log")
 
     # RPE 1s
     _run([
         "evo_rpe", "tum", str(gt_tum), str(est_tum), "-va",
         "-r", "trans_part", "--delta", "1", "--delta_unit", "s",
         "--save_results", str(rpe_1s_zip),
-        "--save_plot", str(run_dir/"rpe_trans_1s.png"),
-    ], run_dir/"evo_rpe_trans_1s.log")
+        "--save_plot", str(out_dir/"rpe_trans_1s.png"),
+    ], L/"evo_rpe_trans_1s.log")
 
     # RPE rot 1s
     _run([
         "evo_rpe", "tum", str(gt_tum), str(est_tum), "-va",
         "-r", "angle_deg", "--delta", "1", "--delta_unit", "s",
         "--save_results", str(rpe_rot_zip),
-        "--save_plot", str(run_dir/"rpe_rot_1s.png"),
-    ], run_dir/"evo_rpe_rot_1s.log")
+        "--save_plot", str(out_dir/"rpe_rot_1s.png"),
+    ], L/"evo_rpe_rot_1s.log")
 
     A = _parse_result_zip(ape_zip)
     T1M = _parse_result_zip(rpe_1m_zip)

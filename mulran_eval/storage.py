@@ -24,8 +24,8 @@ def _append_parquet(df: pd.DataFrame, path: Path):
 
 
 def write_run(rec: RunRecord, root: Path = DEFAULT_ROOT):
-    runs_path = root / "logs" / "runs.parquet"
-    metrics_path = root / "logs" / "metrics.parquet"
+    runs_path = root / "tables" / "runs.parquet"
+    metrics_path = root / "tables" / "metrics.parquet"
 
     # Human-readable artifact co-located with plots/logs
     metrics_json = Path(rec.run_dir) / "metrics.json"
@@ -69,8 +69,15 @@ def write_run(rec: RunRecord, root: Path = DEFAULT_ROOT):
 
 
 def read_tables(root: Path = DEFAULT_ROOT) -> tuple[pd.DataFrame, pd.DataFrame]:
-    runs_path = root / "logs" / "runs.parquet"
-    metrics_path = root / "logs" / "metrics.parquet"
+    tables_dir = root / "tables"
+    logs_dir = root / "logs"
+    runs_path = tables_dir / "runs.parquet"
+    metrics_path = tables_dir / "metrics.parquet"
+    # Legacy fallback if previous layout was used
+    if not runs_path.exists() and (logs_dir / "runs.parquet").exists():
+        runs_path = logs_dir / "runs.parquet"
+    if not metrics_path.exists() and (logs_dir / "metrics.parquet").exists():
+        metrics_path = logs_dir / "metrics.parquet"
     runs = pq.read_table(runs_path).to_pandas() if runs_path.exists() else pd.DataFrame()
     metrics = pq.read_table(metrics_path).to_pandas() if metrics_path.exists() else pd.DataFrame()
     return runs, metrics

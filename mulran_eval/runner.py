@@ -6,7 +6,6 @@ import subprocess
 from pathlib import Path
 from contextlib import ExitStack
 from datetime import datetime, timezone
-from ruamel.yaml import YAML
 from .schemas import RunConfig, RunRecord, Params
 from .evo_tools import compute_metrics
 from .storage import write_run
@@ -16,7 +15,11 @@ from .util import sha1_file, slugify
 def _read_params_yaml(p: Path | None) -> Params:
     if not p or not p.exists():
         return Params()
-    yaml = YAML(typ="safe")
+    try:
+        from ruamel.yaml import YAML as _YAML
+        yaml = _YAML(typ="safe")
+    except Exception:
+        return Params()
     data = yaml.load(p.read_text(encoding="utf-8")) or {}
     # Best-effort extraction; ignores missing keys gracefully
     return Params(
@@ -51,13 +54,16 @@ def run_once(cfg: RunConfig) -> RunRecord:
         out_root = local_base / suffix
         out_root.mkdir(parents=True, exist_ok=True)
 
-    run_dir = out_root / "logs" / base
-    bag_dir = out_root / "bags"
-    run_dir.mkdir(parents=True, exist_ok=True)
-    bag_dir.mkdir(parents=True, exist_ok=True)
+    run_dir = out_root / "runs" / base
+    logs_dir = run_dir / "logs"
+    artifacts_dir = run_dir / "artifacts"
+    bags_dir = out_root / "data" / "bags"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    bags_dir.mkdir(parents=True, exist_ok=True)
 
-    est_bag = bag_dir / f"{base}.bag"
-    est_tum = run_dir / f"{base}.tum"
+    est_bag = bags_dir / f"{base}.bag"
+    est_tum = artifacts_dir / f"{base}.tum"
     gt_tum = Path(cfg.gt_tum_root) / f"{cfg.seq}_gt.tum"
 
     # Snapshot provided params file for reproducibility
@@ -78,7 +84,7 @@ def run_once(cfg: RunConfig) -> RunRecord:
         ]
         if cfg.params_file:
             launch_args.append(f"params_file:={cfg.params_file}")
-        slam_log = (run_dir / "sc_lio.log").open("w", encoding="utf-8")
+        slam_log = (logs_dir / "sc_lio.log").open("w", encoding="utf-8")
         slam = subprocess.Popen(launch_args, stdout=slam_log, stderr=subprocess.STDOUT, text=True)
         stack.callback(lambda: slam.kill())
         time.sleep(5)
@@ -93,7 +99,7 @@ def run_once(cfg: RunConfig) -> RunRecord:
         # 3) Play MulRan
         seq_dir = Path("/data/mulran") / cfg.seq
         player_cmd = ["rosrun", "file_player", "file_player_headless", "--dir", str(seq_dir), "--rate", str(cfg.rate)]
-        player_log = (run_dir / "player.log").open("w", encoding="utf-8")
+        player_log = (logs_dir / "player.log").open("w", encoding="utf-8")
         if cfg.full_seq:
             player = subprocess.Popen(player_cmd, stdout=player_log, stderr=subprocess.STDOUT, text=True)
         else:
@@ -102,7 +108,7 @@ def run_once(cfg: RunConfig) -> RunRecord:
         stack.callback(lambda: player.kill())
 
         # 4) rosbag record
-        record_log = (run_dir / "record.log").open("w", encoding="utf-8")
+        record_log = (logs_dir / "record.log").open("w", encoding="utf-8")
         if cfg.full_seq:
             recorder = subprocess.Popen(["rosbag", "record", cfg.odom_topic, "-O", str(est_bag)],
                                         stdout=record_log, stderr=subprocess.STDOUT, text=True)
@@ -113,7 +119,7 @@ def run_once(cfg: RunConfig) -> RunRecord:
         stack.callback(lambda: recorder.kill())
 
         # 5) odom_to_tum converter
-        od2_log = (run_dir / "odom_to_tum.log").open("w", encoding="utf-8")
+        od2_log = (logs_dir / "odom_to_tum.log").open("w", encoding="utf-8")
         od2 = subprocess.Popen(["python3", "-u", cfg.odom_to_tum, "--topic", cfg.odom_topic, "--out", str(est_tum)],
                                stdout=od2_log, stderr=subprocess.STDOUT, text=True)
         stack.callback(lambda: od2.kill())
@@ -139,7 +145,7 @@ def run_once(cfg: RunConfig) -> RunRecord:
     if not est_tum.exists() or est_tum.stat().st_size == 0:
         status = "no_tum"
     else:
-        metrics = compute_metrics(gt_tum, est_tum, run_dir)
+        metrics = compute_metrics(gt_tum, est_tum, artifacts_dir, logs_dir)
         if metrics is None:
             status = "evo_failed"
 

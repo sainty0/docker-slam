@@ -57,7 +57,7 @@ def aggregate_sweep(sweep_id: str, out_root: Path | None = None) -> pd.DataFrame
     agg["reps"] = df.groupby(KEY_COLS, dropna=False).size().values
 
     # Write to Parquet
-    out_path = root.joinpath("logs", f"aggregates_{sweep_id}.parquet")
+    out_path = root.joinpath("tables", f"aggregates_{sweep_id}.parquet")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     agg.to_parquet(out_path, index=False)
     return agg

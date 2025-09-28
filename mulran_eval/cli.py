@@ -99,13 +99,13 @@ def sweep_ofat(
 @app.command(help="Aggregate a sweep into mean/std per config")
 def aggregate(
     sweep_id: str = typer.Argument(...),
-    out_root: Path = typer.Option(Path("/output"), help="Output root to read/write Parquet logs"),
+    out_root: Path = typer.Option(Path("/output"), help="Output root to read/write Parquet tables"),
 ):
     df = aggregate_sweep(sweep_id, out_root)
     if df.empty:
         print("[yellow]No data found for that sweep_id.[/yellow]")
     else:
-        out = out_root.joinpath("logs", f"aggregates_{sweep_id}.parquet")
+        out = out_root.joinpath("tables", f"aggregates_{sweep_id}.parquet")
         print(f"[green]Wrote[/green] {out}  ([dim]{len(df)} rows[/dim])")
 
 
