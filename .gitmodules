@@ -15,3 +15,7 @@
 	path = file_player_mulran
 	url = https://github.com/sainty0/file_player_mulran.git
 	branch = noetic
+[submodule "rl_vo"]
+	path = rl_vo
+	url = https://github.com/sainty0/rl_vo.git
+	branch = master
