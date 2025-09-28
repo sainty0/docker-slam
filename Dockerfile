@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     ros-noetic-tf ros-noetic-rviz \
     ros-noetic-camera-info-manager \
     libpcl-dev libgeographic-dev     \
+    ros-noetic-rosbridge-server \
  && rm -rf /var/lib/apt/lists/*
 
 # Install yq v4 (YAML processor)

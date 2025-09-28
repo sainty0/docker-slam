@@ -5,3 +5,17 @@ pandas==2.0.3
 pyarrow==17.0.0
 duckdb==1.1.3
 ruamel.yaml==0.18.6
+ipython
+numpy
+PyYAML
+gnupg
+opencv-python
+stable-baselines3
+hydra-core
+wandb
+tqdm
+scipy
+plotly
+SciencePlots
+pycryptodomex
+websocket-client

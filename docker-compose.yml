@@ -22,6 +22,7 @@ x-sc-lio-common: &sc_lio_common
     - ./mulran_eval/:/mulran_eval
     - ./record_mulran_input.sh:/record_mulran_input.sh
     - ./extract-trajectory:/extract-trajectory
+    - ./rl_vo/:/rl_vo
 
 services:
   gtsam-base:
