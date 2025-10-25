@@ -69,3 +69,4 @@ KAIST01_estimation_*/
 # Ignore run timestamps
 run_eval_*.log
 
+/rl_vo/outputs/

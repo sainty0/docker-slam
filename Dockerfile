@@ -49,6 +49,8 @@ COPY SC-LIO-SAM/SC-LIO-SAM/ $WS/src/SC-LIO-SAM
 COPY file_player_mulran/ $WS/src/file_player_mulran
 # RUN git clone --branch noetic --depth=1 https://github.com/RPM-Robotics-Lab/file_player_mulran.git
 
+COPY metric_pkg/ $WS/src/metric_pkg
+
 # (optional) any extra packages here …
 
 # ---- build ------------------------------------------------------------------
