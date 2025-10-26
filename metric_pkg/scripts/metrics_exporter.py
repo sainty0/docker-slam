@@ -20,11 +20,14 @@ import os
 import json
 import math
 from dataclasses import dataclass
+from collections import deque
+import bisect
 
 import rospy
 from std_srvs.srv import Trigger, TriggerResponse
 from sensor_msgs.msg import PointCloud2, Imu
 from nav_msgs.msg import Odometry
+from std_msgs.msg import Float32
 
 
 @dataclass
@@ -52,12 +55,15 @@ class MetricsExporter:
         import argparse
         ap = argparse.ArgumentParser()
         ap.add_argument("--out", default="/tmp/rlvo/metrics.json")
-        ap.add_argument("--dropout_thresh", type=float, default=0.3)
+        ap.add_argument("--dropout_thresh", type=float, default=0.15)
         ap.add_argument("--scan_topic", default="/lio_sam/deskew/cloud_deskewed")
         ap.add_argument("--surf_topic", default="/lio_sam/feature/cloud_surface")
         ap.add_argument("--corner_topic", default="/lio_sam/feature/cloud_corner")
         ap.add_argument("--odom_topic", default="/lio_sam/mapping/odometry_incremental")
         ap.add_argument("--imu_topic", default="/imu/data_raw")
+        # NEW: variable-token controls
+        ap.add_argument("--max_tokens", type=int, default=64)
+        ap.add_argument("--match_tol_s", type=float, default=0.05)
         args, _ = ap.parse_known_args()
 
         rospy.init_node("rl_metrics_exporter", anonymous=True)
@@ -70,6 +76,10 @@ class MetricsExporter:
         self.corner_topic = rospy.get_param("~corner_topic", args.corner_topic)
         self.odom_topic = rospy.get_param("~odom_topic", args.odom_topic)
         self.imu_topic = rospy.get_param("~imu_topic", args.imu_topic)
+        # NEW
+        self.max_tokens = int(rospy.get_param("~max_tokens", args.max_tokens))
+        self.match_tol_s = float(rospy.get_param("~match_tol_s", args.match_tol_s))
+        self._last_action = 0.0
 
         # Accumulators
         self.reset_accumulators()
@@ -80,6 +90,13 @@ class MetricsExporter:
         self.sub_corner = rospy.Subscriber(self.corner_topic, PointCloud2, self.cb_corner, queue_size=20, tcp_nodelay=True)
         self.sub_odom = rospy.Subscriber(self.odom_topic, Odometry, self.cb_odom, queue_size=100, tcp_nodelay=True)
         self.sub_imu = rospy.Subscriber(self.imu_topic, Imu, self.cb_imu, queue_size=200, tcp_nodelay=True)
+        # Track last published leaf size (action)
+        self.sub_leaf = rospy.Subscriber(
+            "/lio_sam/params/mapping_surf_leaf_size",
+            Float32,
+            self._on_leaf_update,
+            queue_size=10, tcp_nodelay=True
+        )
 
         # Services
         self.srv_reset = rospy.Service("/rl_metrics/reset", Trigger, self.on_reset)
@@ -115,6 +132,12 @@ class MetricsExporter:
         self.imu_lin_sq_sum = 0.0
         self.imu_n = 0
 
+        # NEW: time-series buffers for variable tokens (bounded deques for memory safety)
+        self._scan_rec = deque(maxlen=5000)    # (t, pts_total)
+        self._surf_rec = deque(maxlen=5000)    # (t, pts_surf)
+        self._corner_rec = deque(maxlen=5000)  # (t, pts_corner)
+        self._vel_rec = deque(maxlen=20000)    # (t, v_norm)
+
     def _update_time_bounds(self, t):
         if self.t0 is None:
             self.t0 = t
@@ -132,17 +155,23 @@ class MetricsExporter:
         t = msg.header.stamp.to_sec()
         self._update_time_bounds(t)
         self.scan_times.append(t)
-        self.scan_pts.add(self._pts_count(msg))
+        n = self._pts_count(msg)
+        self.scan_pts.add(n)
+        self._scan_rec.append((t, float(n)))
 
     def cb_surf(self, msg: PointCloud2):
         t = msg.header.stamp.to_sec()
         self._update_time_bounds(t)
-        self.surf_pts.add(self._pts_count(msg))
+        n = self._pts_count(msg)
+        self.surf_pts.add(n)
+        self._surf_rec.append((t, float(n)))
 
     def cb_corner(self, msg: PointCloud2):
         t = msg.header.stamp.to_sec()
         self._update_time_bounds(t)
-        self.corner_pts.add(self._pts_count(msg))
+        n = self._pts_count(msg)
+        self.corner_pts.add(n)
+        self._corner_rec.append((t, float(n)))
 
     def cb_imu(self, msg: Imu):
         t = msg.header.stamp.to_sec()
@@ -171,6 +200,7 @@ class MetricsExporter:
             vz = (z - z_prev)/dt
             v = math.sqrt(vx*vx + vy*vy + vz*vz)
             self.vel_norm.add(v)
+            self._vel_rec.append((t, float(v)))
 
             # jolt = |Δv|/Δt
             dv = abs(v - v_prev)
@@ -182,6 +212,7 @@ class MetricsExporter:
                 self.pose_dropouts_s += dt
         else:
             v = 0.0
+            self._vel_rec.append((t, float(v)))
 
         self._last_odom = (t, x, y, z, v)
 
@@ -207,12 +238,59 @@ class MetricsExporter:
             rospy.logerr(msg)
         return TriggerResponse(success=ok, message=msg)
 
+    # NEW: leaf update callback
+    def _on_leaf_update(self, msg: Float32):
+        try:
+            self._last_action = float(msg.data)
+        except Exception:
+            pass
+
     # ---------- Helpers ----------
     def _rate_from_times(self, ts):
         if len(ts) < 2:
             return 0.0
         duration = max(ts[-1] - ts[0], 1e-6)
         return float((len(ts) - 1) / duration)
+
+    # NEW: helpers for variable tokens
+    def _nearest_value(self, rec_deque, t, tol):
+        """rec_deque: deque[(t,val)] sorted by time; return val nearest to t within tol, else 0.0."""
+        if not rec_deque:
+            return 0.0
+        times = [x[0] for x in rec_deque]
+        i = bisect.bisect_left(times, t)
+        cand = []
+        if i < len(times):
+            cand.append((abs(times[i] - t), rec_deque[i][1]))
+        if i > 0:
+            cand.append((abs(times[i - 1] - t), rec_deque[i - 1][1]))
+        if not cand:
+            return 0.0
+        best = min(cand, key=lambda x: x[0])
+        return best[1] if best[0] <= tol else 0.0
+
+    def _build_variable_tokens(self):
+        """
+        Build tokens aligned on scan timestamps.
+        Each token: [surf_pts_at_t, corner_pts_at_t, vel_norm_at_t].
+        """
+        tokens = []
+        if len(self._scan_rec) == 0:
+            return tokens
+        # Use all scan stamps, then downsample if > max_tokens
+        scan_ts = [t for (t, _) in self._scan_rec]
+        stride = max(1, int(math.ceil(len(scan_ts) / float(self.max_tokens))))
+        for idx in range(0, len(scan_ts), stride):
+            t = scan_ts[idx]
+            tok = [
+                float(self._nearest_value(self._surf_rec, t, self.match_tol_s)),
+                float(self._nearest_value(self._corner_rec, t, self.match_tol_s)),
+                float(self._nearest_value(self._vel_rec, t, self.match_tol_s)),
+            ]
+            tokens.append(tok)
+            if len(tokens) >= self.max_tokens:
+                break
+        return tokens
 
     def _make_dict(self):
         # Means/stds
@@ -227,6 +305,10 @@ class MetricsExporter:
         acc_jolt_mean = (self.acc_jolt_sum / self.acc_jolt_n) if self.acc_jolt_n > 0 else 0.0
         imu_ang_rms = math.sqrt(self.imu_ang_sq_sum / self.imu_n) if self.imu_n > 0 else 0.0
         imu_lin_rms = math.sqrt(self.imu_lin_sq_sum / self.imu_n) if self.imu_n > 0 else 0.0
+
+        # Planarity proxy: surf vs total features
+        total_feat = max(surf_mean + corner_mean, 1e-6)
+        planarity = float(surf_mean / total_feat)
 
         d = {
             "pts_per_scan_mean": float(scan_mean),
@@ -243,9 +325,23 @@ class MetricsExporter:
             "acc_jolt_mean": float(acc_jolt_mean),
             "imu_ang_vel_rms": float(imu_ang_rms),
             "imu_lin_acc_rms": float(imu_lin_rms),
-            "planarity_ratio_mean": 0.0,   # optional; set to 0 for now
-            "action_last": 0.0,
+            "planarity_ratio_mean": float(planarity),
+            "action_last": float(self._last_action),
         }
+
+        # NEW: variable tokens + metadata
+        tokens = self._build_variable_tokens()
+        d["variable_tokens"] = tokens                 # list[list[float]]
+        d["variable_tokens_n"] = int(len(tokens))     # pre-pad count
+        d["token_feature_names"] = ["surf_pts", "corner_pts", "vel_norm"]
+
+        # NEW: critique tail (4 dims)
+        d["critique_tail"] = [
+            float(odom_rate),
+            float(self.pose_dropouts_s),
+            float(scan_rate),
+            float(scan_mean),
+        ]
         return d
 
 
