@@ -1,0 +1,41 @@
+\chapter[Introduction]{Introduction}
+\label{Chap:Intro}
+\counterwithout{table}{chapter} % This ensures table numbering doesn't include the Chapter number through the document
+\counterwithout{figure}{chapter}
+
+\makeatletter
+\setlength{\@fptop}{0pt} % This sets figures to the top of a page
+\makeatother
+
+% ***************************************************
+% Introduction
+% ***************************************************
+
+% ********* Enter your text below this line: ********
+
+\section{Background}
+LiDAR-based simultaneous localisation and mapping (SLAM) systems remain a cornerstone for autonomous platforms that must maintain centimetre-level pose estimates in geometrically complex environments \cite{cadena_2016_past}. SC-LIO-SAM builds upon LIO-SAM by fusing LiDAR, inertial, and scan-context descriptors to deliver loop-closed trajectories that can withstand long-term drift on urban drives \cite{shan_2020_liosam}. Its multi-stage pipeline spans feature extraction, factor-graph optimisation, Scan Context loop closures, and runtime voxel filtering, meaning that dozens of parameters influence accuracy, latency, and numerical stability. Hyperparameters governing voxel-grid resolutions, feature counts, and gating thresholds directly alter odometry residuals and computational load, and manual tuning rarely generalises across datasets or platforms.
+
+The LiDAR research community has repeatedly shown that odometry quality hinges on carefully balancing these hyperparameters. Works such as adaptive LiDAR odometry tuning via Bayesian optimisation or reinforcement learning report that even modest adjustments to downsampling thresholds can swing absolute pose error (APE) by tens of centimetres \cite{koide_2021_adaptive,goudreault_2023_lidarintheloop}. Our own one-factor-at-a-time sweeps confirmed similar behaviour for SC-LIO-SAM: voxel-grid settings, particularly the surf leaf size, dictate the density of surf features available to the map optimisation stage, thereby coupling estimator fidelity and runtime budget. Capturing this sensitivity while maintaining real-time constraints motivates automation beyond heuristic scripts.
+
+Reinforcement learning (RL) presents a complementary avenue for perception control because policies can ingest system health indicators and adapt decisions at run time. Messikommer et al. showed that PPO policies armed with latent tokens can regulate visual odometry settings to counter lighting and motion changes \cite{nicomessikommer_2024_reinforcement}. Related studies on VO exposure control and SLAM parameter tuning demonstrated that RL agents can exploit history-dependent metrics to stabilise estimator quality across scenes \cite{ma_2025_mambadqn,zhang_2024_efficient}. Translating those insights to LiDAR SLAM introduces additional complexity—sensor fusion timing, ROS orchestration, and high-dimensional point-cloud statistics—but unlocks the possibility of continuously optimised LiDAR-inertial odometry without manual retuning.
+
+\section{Motivation}
+SC-LIO-SAM exposes the `mapping\_surf\_leaf\_size` parameter, which controls the map-optimisation voxel filter that decides how many surf features participate in scan-to-map alignment \cite{shan_2020_liosam}. Hyperparameter sweeps conducted in this project revealed that modifying this single scalar shifts the trade-off between registration accuracy and computational throughput more than any other runtime-accessible knob. Because SC-LIO-SAM replays MulRan sequences \cite{kim_2020_mulran} with varying structure—from dense downtown canyons to sparse riverside roads—the optimal surf leaf size fluctuates with scene geometry and motion. Static configurations therefore leave accuracy on the table during easy segments yet still risk overload when confronted with cluttered scans. An adaptive controller that leverages real scalar metrics (feature counts, odometry timing, and residual traces) to adjust `mapping\_surf\_leaf\_size` could preserve accuracy while keeping the LiDAR pipeline within its latency envelope.
+
+\section{Problem Statement}
+This thesis investigates whether a reinforcement learning agent can improve pose-estimation performance of SC-LIO-SAM \cite{shan_2020_liosam} by adjusting the `mapping\_surf\_leaf\_size` parameter while replaying MulRan sequences \cite{kim_2020_mulran}, receiving real scalar metrics from the system, and learning policies using proximal policy optimisation (PPO).
+
+\section{Research Objectives}
+\begin{enumerate}[label=\textbf{O\arabic*}]
+  \item Quantify how SC-LIO-SAM accuracy and runtime respond to `mapping\_surf\_leaf\_size` perturbations on representative MulRan sequence.
+  \item Design an RL environment that converts SC-LIO-SAM metrics and state history into stable observations, reward signals, and safe actions for PPO-based policies.
+  \item Demonstrate and analyse PPO training runs that stream MulRan replay through the ROS-native stack, highlighting where adaptive control improves or plateaus relative to static baselines.
+\end{enumerate}
+
+\section{Contributions}
+\begin{itemize}
+  \item \textbf{RL–SC-LIO-SAM architecture}: Implemented a ROS-native training stack that replays MulRan sequences into SC-LIO-SAM, exports real-time metrics, and couples them to a PPO controller capable of adjusting `mapping\_surf\_leaf\_size` without modifying the estimator source.
+  \item \textbf{Hyperparameter sweep pipeline}: Built and operated an automated sweep toolchain that executes controlled SC-LIO-SAM runs, logs evo APE metrics, and isolates the dominant influence of the surf leaf size on mapping fidelity.
+  \item \textbf{Experimental findings}: Ran PPO experiments on multiple MulRan sequence to characterise reward exploitation, plateaus in policy learning, and the actionable limits of single-parameter adaptation in LiDAR-inertial SLAM.
+\end{itemize}

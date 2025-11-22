@@ -1,0 +1,528 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{multirow}
+\usepackage{setspace}
+\usepackage{parskip}
+\usepackage{svg}
+\usepackage[bottom]{footmisc}
+\usepackage{tikz}
+\usepackage{lscape}
+\usepackage{rotating}
+\usepackage[section]{placeins}
+\usepackage{pgfgantt}
+\usetikzlibrary{patterns}
+\usepackage{xcolor}
+\usepackage{pdflscape}
+\usepackage{enumitem}
+\usepackage[section]{minted}
+
+\usepackage[backend=bibtex]{biblatex}
+
+\addbibresource{cites.bib}
+
+
+% This style is used to create block diagrams, you'll find it useful since many of your figures would be of that form, I'll try add more styles in the future :)
+\usetikzlibrary{trees,positioning,fit,calc}
+\tikzset{block/.style = {draw, fill=blue!20, rectangle,
+                         minimum height=3em, minimum width=4em},
+        input/.style = {coordinate},
+        output/.style = {coordinate}
+}
+
+\definecolor{bg}{rgb}{0.95,0.95,0.95}
+\definecolor{phaseColor}{HTML}{4B8BBE}
+\definecolor{taskColor}{HTML}{306998}
+\definecolor{milestoneColor}{HTML}{FFE873}
+
+% Define a new command for Python code blocks
+\newenvironment{pythoncode}
+  {\VerbatimEnvironment
+   \begin{minted}[
+      linenos, 
+      breaklines, 
+      fontsize=\small, 
+      bgcolor=bg, 
+      frame=lines,
+      framesep=2mm,
+      xleftmargin=5mm
+    ]{python}}
+  {\end{minted}}
+
+
+
+
+\usepackage{chngcntr}
+\counterwithin{figure}{section}
+
+\renewcommand{\arraystretch}{1.5}
+
+\usepackage[hidelinks]{hyperref}
+\hypersetup{
+    linktoc=all
+}
+
+\renewcommand\listingscaption{Listing}
+\renewcommand\listoflistingscaption{List of Listings}
+
+\usepackage{scrhack}
+\usepackage{tocbasic}
+\setuptoc{lol}{levelup}
+
+\usepackage{indentfirst}
+\geometry{a4paper, margin=1in}
+
+%----------EDIT COVER INFO HERE -----------------%
+
+\def \LOGOPATH    {assets/UQ-logo.png}
+\def \DEPARTMENT  {Engineering, Architecture \& Information Technology}
+\def \COURSENUM   {METR4911}
+\def \COURSENAME  {Thesis Project}
+\def \REPORTTITLE {Thesis Proposal:\\Reinforcement Learning for Control of Robotic Perception Systems}
+\def \STUDENTNAME {Santiago Rodrigues}
+\def \STUDENTID   {S46423232}
+%------------------------------------------------%
+
+\begin{document}
+\pagenumbering{Roman}
+\begin{titlepage}
+  \thispagestyle{empty}
+  \begin{center}
+    \vspace*{1cm}
+    \includegraphics[width=0.4\textwidth]{\LOGOPATH}\\[1.5em]
+    {\Large \DEPARTMENT}\\[0.5em]
+    {\large \COURSENUM\ --- \COURSENAME}\\[4em]
+    {\bfseries\LARGE \REPORTTITLE}\\[4em]
+    \begin{tabular}{rl}
+      \textbf{Student:}   & \STUDENTNAME\\
+      \textbf{Student ID:}& \STUDENTID\\
+      \textbf{Date:}      & \today
+    \end{tabular}
+    \vfill
+  \end{center}
+\end{titlepage}
+\clearpage
+\pagenumbering{arabic}
+
+
+%--------------ABSTRACT ------------------------%
+
+{
+\section*{Abstract}
+This thesis proposes a reinforcement learning framework that learns, in real time, to tune the hyperparameters of LiDAR–inertial odometry and SLAM pipelines, thereby eliminating the laborious, environment‑specific manual calibration that currently limits field deployment. Building on the latent‑token RL architecture recently demonstrated for visual odometry, we redesign the observation and action spaces to operate on LiDAR scans and integrate the agent with two backends FAST‑LIO2 and LIO‑SAM, without modifying their core algorithms. Policies will be trained offline with Proximal Policy Optimisation on the diverse MulRan and NCLT datasets and then evaluated on the KITTI and Oxford RobotCar benchmarks. Performance will be assessed against default expert settings, a surrogate model Bayesian optimiser, and random search using absolute and relative trajectory error, robustness, and computational efficiency as metrics. By demonstrating statistically significant accuracy gains and reduced failure rates across unseen environments, the research aims to advance self‑optimising robotic perception systems and provide a transferable methodology for adaptive control in broader robotics applications.
+\clearpage
+}
+
+%-----------------------------------------------%
+
+\tableofcontents
+\clearpage
+
+\setlength{\parskip}{\baselineskip}%
+
+
+\listoffigures
+
+\listoftables
+
+\clearpage
+
+\pagenumbering{arabic}
+%--------------INTRODUCTION ---------------------%
+
+\section{Introduction}
+There exists a subset of problems in robotics that require autonomous navigation systems to solve. Central to these systems is the ability to perceive and interpret complex environments through spatial perception techniques, such as simultaneous localisation and mapping (SLAM) and visual odometry (VO). Despite their proven effectiveness, these perception systems are susceptible to the tuning of hyperparameters, a process that traditionally demands extensive manual intervention and often fails to adapt to dynamic real-world conditions.
+
+Advancements in machine learning have paved the way for solutions that can automatically optimise system performance. In particular, reinforcement learning (RL) has shown significant promise in automating hyperparameter tuning for visual odometry systems. For instance, \cite{nicomessikommer_2024_reinforcement} has demonstrated that an RL-based framework, employing latent tokens, can dynamically adjust hyperparameters in real time to meet the changing needs of the environment. Complementary studies in visual SLAM and VO \cite{ma_2025_mambadqn,zhang_2024_efficient} further reinforce the merits of this approach.
+
+Our proposed objective is to extend the methodology introduced by Messikommer et al. \cite{nicomessikommer_2024_reinforcement} from visual odometry to LiDAR based odometry and SLAM systems. This thesis will develop a novel RL-based controller architecture, trained on data from the MulRan and NCLT datasets \cite{kim_2020_mulran, carlevarisbianco_2015_university} to adjust hyperparameters in real-time. The model will be evaluated on the public KITTI and Oxford Robotcar datasets to benchmark performance \cite{geiger_2012_are, maddern_2016_1}.
+
+By demonstrating an adaptive hyperparameter controller for LiDAR‑inertial odometry packages, the project aims to eliminate laborious manual tuning and advance the broader goal of self‑optimising robotic perception systems.
+
+
+\section{Literature Review} 
+
+
+\subsection{Reinforcement Learning}
+Hyperparameter tuning remains a challenging and unresolved issue in all domains that employ algorithms and is by no means unique to robotics. One such domain is deep learning. Recent advances in reinforcement learning have led to the development of agents capable of optimising hyperparameters in deep neural networks \cite{jomaa_2019_hyprl}. RL has also proven to be suitable for temporal vision-based tasks. For example, Dong et al. \cite{dong_2019_dynamical} demonstrated the successful application of a learned agent to visual tracking tasks, highlighting how RL-based methods can effectively navigate the complex, high-dimensional decision spaces inherent in perception problems. However, their work stops short of system-level integration, leaving open the question of how best to embed such agents within broader autonomous systems.
+
+\subsection{Applications of Adaptive Agents}
+The development of a generalisable agent capable of intelligently adapting a system extends beyond the scope of odometry and hyperparameter tuning. Recent research has demonstrated the integration of learned agents into closed-loop control problems, with a particular emphasis on dynamically adjusting PID parameters or switching between distinct control strategies. Although the underlying principle remains similar, these approaches are primarily concerned with designing modular components that operate within a broader closed-loop architecture, rather than establishing a singular and overarching adaptive agent \cite{gao_2023_online, carlucho_2019_double}.
+
+\subsection{Hyperparameter Tuning for Odometry and SLAM}
+
+\subsubsection{Manual Tuning}
+Manual parameter selection by domain experts remains a common and often effective practice. However, this approach is inherently limited by its time-consuming nature and the difficulty of achieving consistent results under varying conditions. These limitations have motivated the development of automated tuning methods aimed at enhancing both adaptability and generalisation.
+
+\subsubsection{Surrogate Function}
+Koide et al. \cite{koide_2021_adaptive} proposed an adaptive framework specifically designed for LiDAR odometry. Leveraging a surrogate modelling approach, their ``black-box`` system predicts odometry errors and dynamically selects hyperparameters optimised for the current environmental conditions, demonstrating significant improvements over traditional manual tuning methods. The framework was intended as a generalisable solution applicable across various LiDAR systems. However, its effectiveness was limited by a lack of extensive testing across diverse scenarios. This limitation was acknowledged by the authors themselves, noting that the framework continued to struggle in new environments. 
+
+\subsubsection{Learned Agents}
+Messikommer et al. \cite{nicomessikommer_2024_reinforcement} introduced a novel approach that integrates RL with an attention mechanism into visual odometry (VO) systems, reframing odometry as a sequential decision-making problem. Their method employs an RL-based agent capable of dynamically adjusting hyperparameters in real time. In their work, the agent was trained across fifteen different environments from the TartanAir dataset \cite{wang_2020_tartanair}, based on the rationale that exposure to a wide range of simulated environments enhances the agent’s ability to generalise to previously unseen conditions.  Similar techniques have recently been explored for VO and visual SLAM, trained on smaller datasets \cite{li_2025_uampc, ma_2025_mambadqn}. Compared to the surrogate function-based approach, the method proposed by Messikommer et al. offers greater generalisability. However, limitations remain. Notably, the training data consisted exclusively of sequences with motion, leading to reduced performance in scenarios where the drone was stationary. This highlights the need for more diverse and representative training data to improve agent robustness in a wider range of real-world conditions. 
+
+There exists a clear opportunity to extend the work done by Messikommer et al. into the field of LiDAR odometry and SLAM. This thesis will specifically focus on bridging this critical gap and developing a comprehensive RL-based hyperparameter tuning architecture tailored to LiDAR-based systems.
+
+
+\section{Project Proposal}
+
+
+\subsection{Aim}
+The primary aim of this thesis is to create and validate an \emph{adaptive hyper‑parameter controller} for LiDAR odometry and SLAM that operates in real time. 
+
+Building directly on the RL framework of Messikommer \emph{et al.}, originally designed for visual odometry. This work will:
+
+\begin{enumerate}
+  \item redesign the observation space and action space so that the RL agent can reason over LiDAR sequences;
+  \item train the agent on simulated and real-world MulRan, NCLT, sequences covering diverse motion and weather conditions, and
+  \item evaluate generalisation on three public, real‑world datasets (KITTI, Oxford RobotCar) without any post‑training fine‑tuning.
+\end{enumerate}
+
+Success will be measured by a statistically significant reduction in absolute trajectory error (ATE) and tracking loss rate compared to manually tuned baselines, and automatic baselines using SMBO \cite{koide_2021_automatic}.
+
+\subsubsection{Problem Statement}
+Following Messikommer et al. \cite{nicomessikommer_2024_reinforcement}, we model LiDAR Odometry (LO) as a sequential decision‑making problem modelled by a Markov Decision Process (MDP).
+
+\[
+  \mathcal{M}=\langle \mathcal{S},\mathcal{A},p,r,\gamma\rangle .
+\]
+
+\paragraph{State\, $s_t\!\in\!\mathcal{S}$.}
+At time $t$, the state encodes the current LiDAR scan~$\mathbf{z}_t$, a compact summary of the local map and the last $k$ estimated poses $\hat{\mathbf{T}}_{t-k:t-1}$.
+
+\paragraph{Action\, $a_t\!\in\!\mathcal{A}$.}
+The agent selects an action to override the hyperparameters.
+
+\paragraph{Transition\, $p$.}
+Given a state $s_t$ and an action $a_t$, the underlying LO pipeline $P$ processes $\mathbf{z}_t$ the likelihood of next pose $\hat{\mathbf{T}}_t$, which updates the map and yields the next state $s_{t+1}$.
+
+\paragraph{Reward\, $r(s_t,a_t)$.}
+We use the pose error and runtime penalty proposed in \cite{nicomessikommer_2024_reinforcement}.
+
+\paragraph{Objective.}
+Let $\pi:\mathcal{S}\!\times\!\mathcal{A}\!\rightarrow\!\mathbb{R}$ be a (stochastic) control policy that assigns
+an action distribution $\pi(a\,|\,s)$ to every state $s\!\in\!\mathcal{S}$.  
+Because $\pi$ is non‑deterministic, it induces a probabilistic trajectory of states and actions
+\[
+  \tau=\{s_0,a_0,s_1,a_1,\dots,s_T,a_{T-1}\}\sim\pi .
+\]
+Following $\pi$, the expected sum of discounted rewards from any state $s_i$ is
+
+\[
+  V^{\pi}(s_i)=
+  \mathbb{E}_{\tau\sim\pi}
+  \Bigl[\,
+      \sum_{t=i}^{\infty}\gamma^{\,t}\,r(s_t,a_t)
+  \Bigr],
+\]
+where $0<\gamma\le 1$ is a discount factor.  
+The overarching goal is therefore
+
+\[
+  \pi^{\star}=\arg\max_{\pi} V^{\pi}(s_0),
+\]
+
+i.e.\ to learn the policy that maximises the expected discounted return. The optimal policy provides online hyperparameter decisions to the LiDAR‑odometry pipeline. We aim to minimise pose error while accounting for runtime using the same optimisation criterion adopted for visual odometry by Messikommer et al. however, extended to the LiDAR domain.
+
+
+\section{Methodology}
+
+
+\subsection{Architecture}
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\linewidth]{assets/thesis_proposal_architecture.png}
+    \caption{Overview of the proposed architecture, adapted from Messikommer et al.~\cite{nicomessikommer_2024_reinforcement}. The LiDAR scan image is reproduced from Shan et al.~\cite{shan_2020_liosam}.}
+    \label{fig:pipeline}
+\end{figure}
+
+\paragraph{Overview.}
+Figure~\ref{fig:pipeline} illustrates the proposed control loop.  Each incoming LiDAR scan is first processed by a conventional odometry backend. At every time‑step $t$, an RL agent observes a compact summary of the backend state and issues an action that modifies one or more hyperparameters for the subsequent scan $t\!+\!1$.
+
+\paragraph{Backend odometry modules.}
+Two Lidar-IMU pipelines will be investigated. They will be integrated with minimal to no changes to their source code:
+
+\begin{enumerate}[label=(\alph*)]
+  \item \textbf{FAST--LIO2}~\cite{xu_2020_fastlio} --- direct LiDAR–IMU odometry using an iterated‑EKF and an incremental $k$‑d tree map.
+  \item \textbf{LIO--SAM}~\cite{shan_2020_liosam} --- feature‑based LiDAR–IMU odometry with a factor‑graph mapping layer.
+\end{enumerate}
+
+\paragraph{Observation space $\mathcal{S}$.}
+At each scan, the agent receives:
+\begin{itemize}
+    \item The most recent $k$ estimated poses $\hat{\mathbf{T}}_{t-k:t-1}$ expressed relative to the current local map frame;
+    \item Map statistic,s which will evolve with experimentation.
+\end{itemize}
+
+\paragraph{Action space \boldmath{$\mathcal{A}$}.}
+The agent outputs a set of independent distributions, each realised from the final MLP head:
+
+\begin{enumerate}[label=(\alph*)]
+  \item \textbf{Keyframe decision} ---
+        a binary distribution indicating whether the current scan should be accepted ($a_t=1$) or rejected ($a_t=0$) as a keyframe.
+  \item \textbf{Hyperparameter selection} ---
+        a second categorical distribution whose support will evolve throughout the study.  Initial experiments will expose a single variable (e.g.\ voxel filter size ). An extension may be to experiment with multiple hyperparameters at once.
+\end{enumerate}
+
+\paragraph{Agent network.}
+Mirroring Messikommer \textit{et al.}~\cite{nicomessikommer_2024_reinforcement}, the policy network employs a Perceiver‑IO encoder with $L$ learnable latent tokens, followed by a two‑layer MLP head that outputs independent categorical logits for each action dimension.  The Perceiver attention mechanism amortises variable‑length keypoint sets into a fixed latent representation, ensuring constant computational cost irrespective of scene complexity.
+
+\paragraph{Training algorithm.}
+Policies are learnt offline using Proximal Policy Optimisation (PPO) with a privileged critic.  The critic receives ground‑truth poses during roll‑outs but is discarded at inference time.
+
+\paragraph{Control cycle.}
+\begin{enumerate}
+    \item Acquire raw scan and IMU packet.
+    \item Execute backend odometry with the hyper‑parameters chosen at $t\!-\!1$, yielding pose $\hat{\mathbf{T}}_t$ and updated map.
+    \item Encode observations and sample action $a_t$ from the policy $\pi_\theta$.
+    \item Update the hyperparameter.
+\end{enumerate}
+
+\subsection{Datasets and Training Split}
+\label{sec:datasets}
+
+\begin{table}[htbp]
+    \centering
+    \caption{Training, validation and Testing Datasets.}
+    \label{tab:datasets}
+    \resizebox{\columnwidth}{!}{%
+    \begin{tabular}{lccc}
+        \toprule
+        \textbf{Role} & \textbf{Dataset} & \textbf{Key Attributes}\\
+        \midrule
+        Training      & MulRan~\cite{kim_2020_mulran} & Urban driving, South Korea Velodyne HDL--32E \\
+                      & NCLT~\cite{carlevarisbianco_2015_university} & Segway, diverse weather, USA \\
+        Validation    & Held--out MulRan+NCLT & --- \\
+        \midrule
+        Testing       & KITTI~\cite{geiger_2012_are} & Urban driving, HDL--64E, Germany \\
+                      & Oxford RobotCar~\cite{maddern_2016_1} & Urban driving, UK, diverse weather \\
+        \bottomrule
+    \end{tabular}%
+    }
+\end{table}
+
+We train alternates mini‑batches from MulRan and NCLT so that the agent experiences (i) diverse weather and (ii) two distinct motion profiles (car \emph{vs.} holonomic Segway). We then evaluate the agent on the KITTI and Oxford RobotCar (Table~\ref{tab:datasets}).
+
+\subsection{Evaluation Metrics}
+\label{sec:metrics}
+\begin{itemize}
+  \item \textbf{Absolute Trajectory Error (ATE).}  Median and 90th percentile.
+  \item \textbf{Relative Pose Error (RPE).}  Translational and rotational.
+  \item \textbf{Robustness.}  Percentage of lost frames and mean re‑initialisation time.
+  \item \textbf{Efficiency.}  Mean processing time per scan and peak memory.
+\end{itemize}
+
+\subsection{Baselines}
+
+\begin{enumerate}
+  \item \emph{Default}: author‑recommended parameters for each back‑end.
+  \item \emph{SMBO}: surrogate‑model Bayesian optimiser \cite{koide_2021_adaptive}, tuned offline per sequence.
+  \item \emph{Random}: uniform sampling in $\mathcal{A}$.
+  \item \emph{Ours}: RL‑controlled FAST--LIO2 and LIO--SAM.
+\end{enumerate}
+
+\subsection{Project Milestones}
+
+\begin{description}[leftmargin=1.5cm,labelwidth=3cm,style=nextline]
+
+  \item[Background Research\\(24 February–1 April 2025; 5 weeks; $\sim$50 hours)]
+  \textbf{Required resources:} Access to scholarly databases and primary research papers.\\
+  \textbf{Objective:} The goal is to understand the problem space. This involves conducting a literature review on the state of the art and identifying gaps and challenges. It also includes researching the feasibility of different project ideas.
+
+  \item[Thesis Proposal\\(1 April–17 April 2025; 3 weeks; $\sim$30 hours)]
+  \textbf{Required resources:} \LaTeX{} environment.\\
+  \textbf{Objective:} Draft a formal proposal that addresses the identified gap, with a detailed methodology, anticipated challenges, and feasibility.\\
+
+  \item[P0 – Initial Setup\\(17 April–23 May 2025; 4 weeks; $\sim$60 hours)]
+  \textbf{Required resources:} GPU compute, Docker.\\
+  \textbf{Objectives:}
+  \begin{itemize}
+    \item Clean and preprocess the KITTI dataset for LiDAR evaluations.
+    \item Adapt and extend the Messikommer et al codebase to align with the proposed architecture. This includes modifying the pipeline to accept LiDAR datasets and integrate LIO-SAM as the backend odometry system.
+    \item Refactor code for modularity and containerise via Docker for reproducibility.
+    \item Prepare materials for the Progress Seminar (Due 12–16 May 2025).
+  \end{itemize}
+  
+  \textbf{Success criteria:} A working end‑to‑end pipeline that ingests KITTI data and produces initial LIO‑SAM results.
+
+  \item[P1 – Iteration\\(23 May–17 June 2025; 3 weeks; $\sim$45 hours)]
+  \textbf{Required resources:} GPU compute, \LaTeX.\\
+  \textbf{Objectives:}
+  \begin{itemize}
+    \item Investigate which hyperparameters are the most suitable candidates for adaptive control, and evaluate alternative architectural designs.
+    \item Record and analyse performance metrics to identify meaningful patterns.
+    \item Commence drafting thesis chapters preliminary results.
+  \end{itemize}
+  \textbf{Success criteria:} Demonstration of statistically significant performance gains over a random baseline.
+
+  \item[P2 – System Optimisation and Benchmarking\\(17 June–4 August 2025; 7 weeks; $\sim$70 hours)]
+  \textbf{Required resources:} GPU compute.\\
+  \textbf{Objectives:}
+  \begin{itemize}
+    \item Incorporate additional datasets (MulRan, NCLT, Oxford RobotCar) into the pipeline.
+    \item Implement a standardised logging and benchmarking framework.
+    \item Extend backend support to FAST‑LIO.
+  \end{itemize}
+  \textbf{Success criteria:} Seamless swapping of datasets and backends with automated benchmarking.
+
+  \item[P3 – Generalisation Assessment and Validation\\(4 August–24 October 2025; 11 weeks; $\sim$110 hours)]
+  \textbf{Required resources:} GPU compute, \LaTeX.\\
+  \textbf{Objectives:}
+  \begin{itemize}
+    \item Iterate through different processes to see to what extent the architecture is generalisable to different:
+      \begin{itemize}
+        \item egomotions;
+        \item LiDAR scanners, and
+        \item environments.
+      \end{itemize}
+    \item Integrate comparative methods from existing literature to benchmark performance.
+    \item Update the thesis draft continuously and submit a draft by 21 August 2025.
+  \end{itemize}
+  \textbf{Success criteria:} Consistent, statistically significant improvements over baseline across all test conditions.
+
+  \item[P4 – Thesis Finalisation\\(24 October–10 November 2025; 2 weeks; $\sim$40 hours)]
+  \textbf{Required resources:} \LaTeX.\\
+  \textbf{Objectives:}
+  \begin{itemize}
+    \item Consolidate all findings and polish the thesis.
+    \item Incorporate supervisory feedback and ensure professional presentation.
+    \item Finalise and submit the thesis.
+  \end{itemize}
+  \textbf{Success criteria:} Completion of a professional quality thesis.
+
+\end{description}
+
+\bigskip
+\noindent\textbf{Extension Tasks:}
+\begin{itemize}
+    \item Create simulation datasets to test a wider degree of environments.
+    \item Extend the architecture to support tuning of multiple hyperparameters, rather than a single parameter.
+    \item Further investigate the ability of the architecture to integrate new LiDAR techniques.
+\end{itemize}
+
+\subsubsection{Gantt Chart}
+\begin{figure}[H]
+  \centering
+  \resizebox{.95\linewidth}{!}{%
+    \begin{ganttchart}[
+        time slot format=isodate-yearmonth,
+        time slot unit=month,
+        x unit=1.3cm,
+        y unit title=0.8cm,
+        y unit chart=1cm,
+        label font=\scriptsize,
+        bar label font=\scriptsize,
+        group label font=\scriptsize\bfseries,
+        milestone label font=\scriptsize\bfseries,
+        label text width=2.5cm,
+        label text anchor=east,
+        hgrid,
+        vgrid,
+        bar height=0.6,
+        group left shift=0,
+        group right shift=0,
+        bar top shift=0.2,
+        title label font=\small\bfseries,
+        title/.style={draw=none, fill=none},
+        group/.style={fill=phaseColor!60},
+        bar/.style={fill=taskColor!70},
+        milestone/.style={shape=isosceles triangle, fill=milestoneColor, draw=black}
+    ]{2025-02}{2025-11}
+
+      \gantttitlecalendar{year, month=shortname}
+
+      % Phase 1
+      \ganttgroup{Phase 1: Research \& Proposal}{2025-02}{2025-04} \\
+      \ganttbar{Background Research}{2025-02}{2025-04} \\
+      \ganttbar{Thesis Proposal}{2025-04}{2025-04} \\
+
+      % Phase 2
+      \ganttgroup{Phase 2: Setup \& Iteration}{2025-04}{2025-06} \\
+      \ganttbar{Initial Setup (P0)}{2025-04}{2025-05} \\
+      \ganttbar{Iteration (P1)}{2025-05}{2025-06} \\
+
+      % Phase 3
+      \ganttgroup{Phase 3: Optimisation \& Validation}{2025-06}{2025-10} \\
+      \ganttbar{Optimisation (P2)}{2025-06}{2025-08} \\
+      \ganttbar{Monitoring \& Validation (P3)}{2025-08}{2025-10} \\
+
+      % Phase 4
+      \ganttgroup{Phase 4: Finalisation}{2025-10}{2025-11} \\
+      \ganttbar{Thesis Wrap‑up (P4)}{2025-10}{2025-11} \\
+
+    \end{ganttchart}%
+  }
+  \caption[Gantt chart of thesis milestones]{Gantt chart of the project milestones.}
+  \label{fig:gantt}
+\end{figure}
+
+
+\section{Risk Assessment}
+
+
+\begin{table}[h]
+    \centering
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{|c|l|p{10cm}|}
+        \hline
+        \textbf{Rank} & \textbf{Likelihood} & \textbf{Description} \\ 
+        \hline
+        5 & certain   & Guaranteed to happen at least once during the project \\ 
+        4 & Likely        &  Over 50\% probability of happening \\ 
+        3 & Possible      & 30-50\% probability of occurring \\ 
+        2 & Unlikely      &  Less than 20\% probability of occurring \\ 
+        1 & Very unlikely & Almost certain to not occur \\ 
+        \hline
+    \end{tabular}
+    \caption{Likelihood Descriptions}
+\end{table}
+
+
+\begin{table}[h]
+    \centering
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{|c|l|p{10cm}|}
+        \hline
+        \textbf{Rank} & \textbf{Severity} & \textbf{Description} \\ 
+        \hline
+        5 & Severe   & Critical flaw resulting in delay greater than a month \\ 
+        4 & Significant      & Significant failure resulting in delay greater than two weeks. \\ 
+        3 & Moderate   &   Unrecoverable loss, with a delay of less than two weeks. \\
+        2 & Minor &  Potentially recoverable loss with a delay of less than one week. \\
+        1 & Negligible & Easily recoverable loss, or less than a day delay. \\ 
+        \hline
+    \end{tabular}
+    \caption{Severity Descriptions}
+\end{table}
+
+\subsection{Project-Related Risk Assessment}
+
+\begin{table}[H]
+    \centering
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{|c|p{6cm}|c|c|c|p{6cm}|}
+        \hline
+        \textbf{ID} & \textbf{Risk} & \textbf{SEV} & \textbf{LIKE} & \textbf{Total} & \textbf{Mitigation} \\
+        \hline
+        1 & Insufficient computing resources available & 3 & 4 & 12 & Train on smaller datasets and utilise multiple platforms, such as the HPC, local, and cloud computing. \\
+        \hline
+        2 & LIDAR odometry requires significantly more compute resources than VO & 3 & 3 & 9 & Test on smaller datasets and be ready to narrow the scope of training. \\
+        \hline
+        3 &  Failure of long-running training models & 1 & 5 & 5 & Iteratively train models and save epochs onto cloud. \\
+        \hline
+        4 & LIDAR dataset is insufficient and/or too unwieldy to train in the period & 4 & 2 & 8 & Look into multiple dataset options and attempt limited scope training first. \\
+        \hline
+    \end{tabular}
+    }
+    \caption{Project-Related Risks}
+\end{table}
+
+\clearpage
+\printbibliography
+
+\end{document}

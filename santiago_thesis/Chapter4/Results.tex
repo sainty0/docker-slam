@@ -1,0 +1,78 @@
+\chapter[Results]{Results}
+\label{Chap:Results}
+
+% ***************************************************
+% Results
+% ***************************************************
+
+% ********* Enter your text below this line: ********
+
+\section{Hyperparameter Sweep Outcomes}
+Automated one-factor-at-a-time sweeps established the response surface linking SC-LIO-SAM parameters to absolute pose error (APE) measured by the \texttt{evo} toolkit \cite{grupp2017evo}. Each experiment replayed MulRan KAIST01 and Riverside01 sequences \cite{kim_2020_mulran} under fixed-rate ROS sessions to isolate the effect of a single knob. Table~\ref{tab:sweep_trends} summarises the dominant qualitative trends. The results confirmed that voxel densities modulate APE more than edge/surf feature thresholds. \texttt{mappingSurfLeafSize} delivered the steepest trade-off between accuracy and runtime while remaining adjustable at runtime through \texttt{/lio\_sam/params/mapping\_surf\_leaf\_size}, which motivated its selection as the RL-controlled action.
+
+\begin{table}[ht]
+    \centering
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{p{0.23\linewidth}p{0.32\linewidth}p{0.33\linewidth}}
+        \toprule
+        \textbf{Parameter} & \textbf{Observed APE trend} & \textbf{Runtime / stability implication} \\
+        \midrule
+        \texttt{mappingSurfLeafSize} & Monotonic reduction in APE when decreasing from $0.65$\,m to $0.45$\,m, followed by diminishing returns and occasional drift when below $0.35$\,m. & Smaller voxels increased per-frame solve time by 20--30\% and triggered ROS watchdog warnings on long Riverside01 segments. \\
+        \texttt{mappingCornerLeafSize} & Similar but weaker sensitivity; tighter grids helped KAIST01 loop closures yet forced restarts when bag playback entered dense foliage. & Cannot be tuned at runtime; required relaunching SC-LIO-SAM to test each value, so unsuitable for RL. \\
+        \texttt{odometrySurfLeafSize} & APE improved only when paired with smaller mapping voxels; isolated changes produced noise-like effects. & Aggressive reductions occasionally destabilised IMU integration, yielding invalid steps filtered by the RL environment. \\
+        Feature thresholds (\texttt{edgeThreshold}, \texttt{surfThreshold}) & Minimal change in APE or runtime within the tested ranges; scans remained feature-rich. & Provided safe baselines but no actionable leverage for adaptive control. \\
+        \bottomrule
+    \end{tabular}
+    \caption{Qualitative findings from the OFAT sweep campaign replaying MulRan sequences with SC-LIO-SAM \cite{shan_2020_liosam}.}
+    \label{tab:sweep_trends}
+\end{table}
+
+\section{PPO Training Performance}
+Policies were trained with PPO using the ROS-native environment derived in Chapter~\ref{Chap:Methodology}. Reward traces aggregated from WANDB logs revealed a consistent two-phase dynamic. Initial rollouts (iterations $0$--$20$) rapidly improved because the policy exploited obvious runtime penalties by avoiding overly small leaf sizes. Subsequent iterations plateaued as APE and runtime competed: the agent must shrink voxels to improve mapping accuracy yet receives an explicit runtime penalty and a smoothness cost. The plateau manifested as oscillations around a narrow region of the action space ($0.42$--$0.55$\,m) rather than persistent growth.
+
+\begin{figure}[ht]
+\centering
+\begin{verbatim}
+```mermaid
+flowchart LR
+    Warmup[Warm-up<br/>(iterations 0-10)]
+    Adapt[Data-efficient improvement<br/>(iterations 10-20)]
+    Plateau[Reward plateau<br/>(iterations 20+)]
+    Warmup --> Adapt --> Plateau
+    Plateau -->|runtime spikes| Warmup
+    Plateau -->|reward exploit: small voxels| Adapt
+```
+\end{verbatim}
+\caption{Qualitative phases extracted from PPO reward curves collected during ROS-native training runs.}
+\label{fig:reward_phases}
+\end{figure}
+
+Validation episodes executed deterministically after every five PPO iterations. KAIST01 exhibited modest APE reductions compared with baseline leaf sizes because its urban canyons benefited from denser surf maps. Riverside01 showed comparable APE but improved runtime stability; the learned policy avoided pushing SC-LIO-SAM beyond its CPU budget when the sequence transitioned to open riverside roads with high return counts. These findings indicate that PPO primarily redistributes runtime headroom rather than achieving unbounded accuracy gains, aligning with prior reinforcement learning studies that struggled to surpass well-tuned baselines once the policy converged \cite{nicomessikommer_2024_reinforcement}.
+
+\section{Reward Exploitation Patterns}
+Inspection of action logs revealed that the policy exploited the shaped reward by alternating between two behaviours:
+\begin{enumerate}
+    \item \textbf{Aggressive contraction} when scan statistics suggested low planarity. The agent drove \texttt{mapping\_surf\_leaf\_size} toward $0.40$\,m, accepting a short runtime penalty to lower APE on cluttered MulRan downtown segments.
+    \item \textbf{Runtime recovery} whenever odometry cadence lagged. Because the reward directly penalises runtime, PPO quickly responded by expanding voxels toward $0.55$\,m, restoring throughput at the cost of slightly higher APE.
+\end{enumerate}
+Table~\ref{tab:rl_eval_summary} contrasts these regimes on the two evaluation sequences. The action history also showed bias toward previous steps because the observation vector includes \texttt{action\_last}; consequently, once the agent entered either regime it tended to persist until a runtime violation or feature deficit forced a switch.
+
+\begin{table}[ht]
+    \centering
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{p{0.18\linewidth}p{0.30\linewidth}p{0.39\linewidth}}
+        \toprule
+        \textbf{Sequence} & \textbf{Baseline behaviour} & \textbf{Policy effect and reward exploitation} \\
+        \midrule
+        KAIST01 & Static $0.55$\,m leaf size yielded stable runtimes but left residual drift at loop closures. & PPO frequently contracted voxels before intersection clusters, reducing loop-closure APE without triggering prolonged runtime penalties. The reward plateau corresponded to alternating between contraction and neutral actions. \\
+        Riverside01 & Baseline leaf sizes already satisfied accuracy targets but occasionally exceeded runtime budgets during dense foliage segments. & The policy rarely contracted below $0.50$\,m; instead it exploited the runtime term by expanding voxels during foliage bursts, preventing ROS restarts and preserving positive rewards even when APE did not improve. \\
+        \bottomrule
+    \end{tabular}
+    \caption{Qualitative comparison between static baselines and PPO-controlled policies when replaying MulRan sequences.}
+    \label{tab:rl_eval_summary}
+\end{table}
+
+\section{Hardware Variability Observations}
+Training on live ROS stacks exposed hardware-induced variability absent from offline simulators. CPU utilisation spikes—especially when \texttt{metric\_pkg} flushed large token buffers or when \texttt{file\_player\_headless} resynchronised \texttt{/clock}—introduced jitter in odometry publication rates. These events manifested as temporary drops in the reward curve and were subsequently filtered by the environment's valid-mask logic. Episodes that coincided with host-level thermal throttling exhibited increased latency, evidenced by higher \texttt{runtime\_s} penalties and frequent action expansions to compensate. This observation underlines the benefit of real-robot integration: PPO learned to associate odometry cadence with safe action ranges, implicitly adapting to hardware variability without any additional sensing channels.
+
+Overall, the experiments show that the RL controller delivers marginal yet consistent benefits when compensating for SC-LIO-SAM's sensitivity to \texttt{mapping\_surf\_leaf\_size}, while respecting the computational limits enforced by real ROS deployments.

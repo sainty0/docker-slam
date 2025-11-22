@@ -1,0 +1,28 @@
+\chapter[Discussion]{Discussion}
+\label{Chap:Discussion}
+
+% ***************************************************
+% Discussion
+% ***************************************************
+
+% ********* Enter your text below this line: ********
+
+\section{Policy Behaviour and Plateaued Learning}
+PPO training delivered consistent early gains yet plateaued once policies converged to a narrow range of \texttt{mapping\_surf\_leaf\_size} values. Unlike the multi-parameter control spaces explored in RL-meets-VO \cite{nicomessikommer_2024_reinforcement}, the single action channel in this work constrains the achievable reward frontier. Once PPO learns to oscillate between $0.40$--$0.55$\,m—balancing accuracy and runtime penalties—additional exploration yields little benefit because the agent cannot manipulate complementary parameters such as corner voxels or IMU integration weights. The plateau therefore reflects a structural limit rather than an optimisation failure: SC-LIO-SAM \cite{shan_2020_liosam} exposes only one safe runtime actuator, and PPO quickly saturates it.
+
+The behaviour also highlights the importance of the observation design. Including \texttt{action\_last} stabilised the policy but encouraged hysteresis—actions tended to persist until runtime penalties forced a switch. This effect mirrors temporal correlations reported in vision-based studies \cite{nicomessikommer_2024_reinforcement}, yet here it manifested more strongly because MulRan replay \cite{kim_2020_mulran} lacks the diversity of simulated datasets. Consequently, PPO had fewer opportunities to escape the locally optimal oscillatory policy.
+
+\section{Reward Shaping Implications}
+The reward combined APE, runtime, and action smoothness, successfully preventing pathological oscillations but also encouraging conservative policies. The runtime term dominated whenever CPU utilisation spiked, prompting the agent to expand voxels rather than maintain tighter alignment. This behaviour preserved system stability but limited peak accuracy improvements, illustrating a classic shaping trade-off: the penalty ensured safe operation yet acted as a ceiling on achievable rewards. Additionally, the action-smoothness penalty amplified the plateau because it discouraged rapid corrections after erroneous contractions.
+
+Future reward formulations could incorporate delayed credits, e.g., rewarding loop-closure quality at the end of episodes, so PPO can justify brief runtime regressions when they yield substantial accuracy gains. However, such shaping would require more reliable long-horizon metrics than the current three-second APE window, and it would complicate the masking strategy that presently keeps training stable.
+
+\section{SC-LIO-SAM Sensitivity and Interpretation}
+The experiments reaffirmed SC-LIO-SAM’s reliance on voxel-leaf parameters. Sweeps showed that \texttt{mapping\_surf\_leaf\_size} strongly influences both convergence and computational load, whereas other runtime-accessible signals had marginal effects. The RL controller exploited this sensitivity by adapting voxel size according to point-density metrics, effectively acting as a gain scheduler for the surf map. Nevertheless, because only one degree of freedom was available, the agent could not counteract other failure modes such as IMU bias creep or Scan Context misdetections. This explains why accuracy improvements plateaued despite continued training: the agent had already exhausted the only lever that materially alters scan-to-map alignment.
+
+Interpreting the learned policy also provided insights into SC-LIO-SAM’s operating envelope. The policy rarely pushed below $0.38$\,m, implying that smaller voxels offer little benefit under MulRan’s sensor noise characteristics. Conversely, expanding beyond $0.60$\,m consistently triggered reward drops, highlighting the threshold where surf sparsity degrades factor-graph conditioning. These observations contribute a data-driven guideline for manual tuning sessions beyond the RL experiments themselves.
+
+\section{Training Stability and Variability}
+Operating PPO inside a live ROS stack introduced timing jitter absent from purely simulated pipelines. Hardware-related variability—CPU contention from point-cloud processing, disk flushes when writing metrics, and occasional rosbridge stalls—manifested as reward dips and invalid masks. The orchestrator’s restart logic and masking prevented these events from corrupting gradient updates, yet they slowed training because entire rollouts were discarded when ground-truth or metrics went missing. This explains why PPO required many wall-clock hours to reach the plateau despite using modest rollout lengths.
+
+Comparing these behaviours to prior RL-meets-VO work underscores the added complexity of LiDAR-centric control. Simulated vision datasets deliver deterministic episode lengths, whereas MulRan replays inherit sensor downtime and hardware noise. The present system demonstrated that PPO can absorb this variability, but the price is reduced sample efficiency and heightened sensitivity to shaping terms that guard against runtime overruns. Future work could mitigate these issues through prioritised replay of valid transitions, adaptive step lengths that align with ROS timing, or secondary hardware monitoring channels that help the policy distinguish estimator failures from host-level slowdowns.

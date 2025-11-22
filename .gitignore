@@ -69,4 +69,17 @@ KAIST01_estimation_*/
 # Ignore run timestamps
 run_eval_*.log
 
+# Latex
 /rl_vo/outputs/
+*.out
+*.lof
+*.lot
+*.aux
+*.toc
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.cut
+MainThesis.synctex.gz
+/thesis_helper/

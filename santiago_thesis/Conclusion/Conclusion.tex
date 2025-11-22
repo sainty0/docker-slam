@@ -1,0 +1,20 @@
+% ***************************************************
+% Conclusion
+% ***************************************************
+\chapter[Conclusion]{Conclusion}
+\label{Chap:Conclusion}
+
+\section{Summary}
+This thesis investigated whether a reinforcement learning controller could improve SC-LIO-SAM’s pose accuracy by modulating \texttt{mapping\_surf\_leaf\_size} during MulRan replays \cite{shan_2020_liosam,kim_2020_mulran}. The work introduced a ROS-native training architecture that replays recorded LiDAR sessions, exports lightweight metrics, and couples them to a PPO agent inspired by RL-meets-VO \cite{nicomessikommer_2024_reinforcement}. Automated hyperparameter sweeps highlighted that surf voxel size dominates absolute pose error, justifying the single-action design. Within this framework the PPO agent learned to trade off accuracy and runtime by contracting voxels during cluttered segments and expanding them when CPU budgets tightened, delivering measurable improvements over static tuning while maintaining estimator stability. The resulting system demonstrates that reinforcement learning can safely interact with a production-grade LiDAR SLAM stack when supplied with real scalar metrics and strong safety shaping.
+
+\section{Future Work}
+\begin{enumerate}[label=\textbf{F\arabic*}]
+  \item \textbf{Multi-parameter control}: Extend the action space to include additional SC-LIO-SAM knobs (e.g., corner voxels or IMU weighting) by introducing runtime-safe reconfiguration hooks so PPO can access a richer set of trade-offs.
+  \item \textbf{Reward redesign}: Incorporate delayed accuracy metrics such as loop-closure quality or long-horizon drift to reduce reliance on short APE windows and allow the agent to justify temporary runtime penalties when they yield global benefits.
+  \item \textbf{Adaptive orchestration}: Instrument hardware load, ROS queue depths, and file-player jitter to give the agent explicit visibility of host variability, improving sample efficiency and robustness to execution noise.
+  \item \textbf{Dataset expansion}: Train on additional LiDAR corpora (e.g., KITTI \cite{geiger_2012_are} or Oxford RobotCar \cite{maddern_2016_1}) to expose the policy to diverse geometries and to quantify how well the learned control strategy transfers beyond MulRan.
+\end{enumerate}
+
+These directions build on the foundation laid here—tight coupling between RL and SC-LIO-SAM—and aim to unlock broader generalisation and larger accuracy gains without sacrificing the runtime guarantees required for deployment.
+
+% ***************************************************
